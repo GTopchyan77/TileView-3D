@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { SiteNav } from "@/components/site-nav";
 import { useTiles } from "@/hooks/use-tiles";
 import { roomTemplates } from "@/lib/room-templates";
@@ -173,6 +174,31 @@ function TileCard({
       </div>
       <p className="mt-3 text-xs font-medium text-slate-300/80">Tap to apply to {targetLabel}</p>
     </button>
+  );
+}
+
+function AccordionSection({
+  title,
+  subtitle,
+  defaultOpen = false,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <details open={defaultOpen} className="panel rounded-[24px] p-4 md:hidden">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 text-left [&::-webkit-details-marker]:hidden">
+        <div>
+          <p className="text-base font-semibold text-slate-50">{title}</p>
+          {subtitle ? <p className="mt-1 text-sm text-slate-300">{subtitle}</p> : null}
+        </div>
+        <span className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-200">Open</span>
+      </summary>
+      <div className="mt-4">{children}</div>
+    </details>
   );
 }
 
@@ -376,6 +402,292 @@ export function VisualizerShell() {
     syncRoomObjects(room.id);
   };
 
+  const roomSelectorContent = (
+    <div className="grid gap-3">
+      {roomTemplates.map((template) => (
+        <button
+          key={template.id}
+          type="button"
+          onClick={() => handleRoomChange(template.id)}
+          data-active={room.id === template.id}
+          className={`toggle-pill min-h-11 rounded-[24px] border px-4 py-4 text-left transition ${
+            room.id === template.id
+              ? "border-sky-400/50 bg-sky-400/10 text-white shadow-[0_0_24px_rgba(56,189,248,0.12)]"
+              : "border-white/10 bg-white/4 text-slate-200 hover:bg-white/8"
+          }`}
+        >
+          <p className="font-semibold text-current">{template.label}</p>
+          <p className="mt-1 text-sm text-slate-300">{template.description}</p>
+        </button>
+      ))}
+    </div>
+  );
+
+  const surfaceSelectorContent = (
+    <div className="grid gap-3">
+      {[
+        {
+          id: "floor" as SurfaceSelection,
+          label: "Floor",
+          copy: "Apply the active tile only to the floor.",
+        },
+        {
+          id: "left-wall" as SurfaceSelection,
+          label: "Left Wall",
+          copy: "Apply the active tile only to the left wall.",
+        },
+        {
+          id: "right-wall" as SurfaceSelection,
+          label: "Right Wall",
+          copy: "Apply the active tile only to the right wall.",
+        },
+        {
+          id: "back-wall" as SurfaceSelection,
+          label: "Back Wall",
+          copy: "Apply the active tile only to the back wall.",
+        },
+        {
+          id: "all-walls" as SurfaceSelection,
+          label: "All Walls",
+          copy: "Apply the active tile across every wall surface.",
+        },
+      ].map((surface) => {
+        const isActive = surfaceTarget === surface.id;
+
+        return (
+          <button
+            key={surface.id}
+            type="button"
+            onClick={() => setSurfaceTarget(surface.id)}
+            data-active={isActive}
+            className={`toggle-pill min-h-11 rounded-[24px] px-4 py-4 text-left transition ${
+              isActive
+                ? "bg-gradient-to-r from-blue-600 to-sky-500 text-white shadow-[0_14px_30px_rgba(37,99,235,0.24)]"
+                : "bg-white/5 text-slate-200 hover:bg-white/8"
+            }`}
+          >
+            <p className="text-sm font-semibold">{surface.label}</p>
+            <p className={`mt-1 text-sm ${isActive ? "text-slate-100/90" : "text-slate-300"}`}>
+              {surface.copy}
+            </p>
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  const sceneObjectsContent = (
+    <div className="rounded-[24px] border border-white/10 bg-white/5 p-4">
+      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">
+        Scene objects
+      </p>
+      {placedObjects.length ? (
+        <div className="mt-3 grid gap-2">
+          {placedObjects.map((object, index) => {
+            const isSelected = object.id === selectedObjectId;
+
+            return (
+              <button
+                key={object.id}
+                type="button"
+                onClick={() => setSelectedObjectId(object.id)}
+                className={`min-h-11 rounded-[18px] border px-4 py-3 text-left text-sm transition ${
+                  isSelected
+                    ? "border-sky-400/40 bg-sky-500/12 text-sky-100"
+                    : "border-white/10 bg-slate-950/45 text-slate-200 hover:border-white/20"
+                }`}
+              >
+                <p className="font-semibold">
+                  {index + 1}. {getObjectLabel(object.type)}
+                </p>
+                <div className="mt-2">
+                  <span
+                    className={`rounded-full px-2.5 py-1 text-[0.62rem] font-semibold uppercase tracking-[0.14em] ${
+                      objectRenderStates[object.id] === "gltf"
+                        ? "border border-emerald-400/30 bg-emerald-500/12 text-emerald-200"
+                        : "border border-amber-400/30 bg-amber-500/12 text-amber-200"
+                    }`}
+                  >
+                    {objectRenderStates[object.id] === "gltf" ? "Real model" : "Placeholder"}
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-slate-300">
+                  X {object.x.toFixed(2)} m / Z {object.z.toFixed(2)} m
+                </p>
+                {object.type === "table" && objectRenderStates[object.id] === "placeholder" ? (
+                  <p className="mt-2 text-xs font-medium text-rose-300">
+                    Failed to load table.glb
+                  </p>
+                ) : null}
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="mt-3 text-sm text-slate-300">
+          Empty Room starts without objects. Add any object manually if needed.
+        </p>
+      )}
+    </div>
+  );
+
+  const selectedObjectControls = selectedObject ? (
+    <div className="rounded-[24px] border border-white/10 bg-white/5 p-4 md:sticky md:top-20">
+      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">
+        Selected object
+      </p>
+      <p className="mt-2 text-lg font-semibold text-slate-50">
+        {getObjectLabel(selectedObject.type)}
+      </p>
+      <div className="mt-3">
+        <span
+          className={`rounded-full px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em] ${
+            objectRenderStates[selectedObject.id] === "gltf"
+              ? "border border-emerald-400/30 bg-emerald-500/12 text-emerald-200"
+              : "border border-amber-400/30 bg-amber-500/12 text-amber-200"
+          }`}
+        >
+          {objectRenderStates[selectedObject.id] === "gltf" ? "Real model" : "Placeholder"}
+        </span>
+      </div>
+      {selectedObject.type === "table" && objectRenderStates[selectedObject.id] === "placeholder" ? (
+        <p className="mt-3 text-sm font-medium text-rose-300">
+          Failed to load table.glb
+        </p>
+      ) : null}
+
+      <div className="mt-4 grid grid-cols-3 gap-2">
+        <button
+          type="button"
+          onClick={() => updateSelectedObject({ y: 0 })}
+          className="secondary-btn min-h-11 px-3 py-2 text-xs"
+        >
+          Floor
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            updateSelectedObject({ y: Math.min(3, (selectedObject.y ?? 0) + 0.1) })
+          }
+          className="secondary-btn min-h-11 px-3 py-2 text-xs"
+        >
+          Raise
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            updateSelectedObject({ y: Math.max(-0.2, (selectedObject.y ?? 0) - 0.1) })
+          }
+          className="secondary-btn min-h-11 px-3 py-2 text-xs"
+        >
+          Lower
+        </button>
+      </div>
+
+      <label className="mt-4 block">
+        <span className="mb-2 block text-sm font-medium text-slate-200">
+          X position {selectedObject.x.toFixed(2)} m
+        </span>
+        <input
+          type="range"
+          min={-room.widthM / 2 + 0.45}
+          max={room.widthM / 2 - 0.45}
+          step="0.05"
+          value={selectedObject.x}
+          onChange={(event) => updateSelectedObject({ x: Number(event.target.value) })}
+          className="w-full accent-sky-400"
+        />
+      </label>
+
+      <label className="mt-4 block">
+        <span className="mb-2 block text-sm font-medium text-slate-200">
+          Height / Y Position {(selectedObject.y ?? 0).toFixed(2)} m
+        </span>
+        <input
+          type="range"
+          min="-0.2"
+          max="3"
+          step="0.01"
+          value={selectedObject.y ?? 0}
+          onChange={(event) => updateSelectedObject({ y: Number(event.target.value) })}
+          className="w-full accent-sky-400"
+        />
+      </label>
+
+      <label className="mt-4 block">
+        <span className="mb-2 block text-sm font-medium text-slate-200">
+          Z position {selectedObject.z.toFixed(2)} m
+        </span>
+        <input
+          type="range"
+          min={-room.depthM / 2 + 0.45}
+          max={room.depthM / 2 - 0.45}
+          step="0.05"
+          value={selectedObject.z}
+          onChange={(event) => updateSelectedObject({ z: Number(event.target.value) })}
+          className="w-full accent-sky-400"
+        />
+      </label>
+
+      <label className="mt-4 block">
+        <span className="mb-2 block text-sm font-medium text-slate-200">
+          Rotation {Math.round(selectedObject.rotationDeg)} deg
+        </span>
+        <input
+          type="range"
+          min="0"
+          max="360"
+          step="1"
+          value={selectedObject.rotationDeg}
+          onChange={(event) => updateSelectedObject({ rotationDeg: Number(event.target.value) })}
+          className="w-full accent-sky-400"
+        />
+      </label>
+
+      <label className="mt-4 block">
+        <span className="mb-2 block text-sm font-medium text-slate-200">
+          Scale {selectedObject.scale.toFixed(2)}x
+        </span>
+        <input
+          type="range"
+          min="0.6"
+          max="1.8"
+          step="0.05"
+          value={selectedObject.scale}
+          onChange={(event) => updateSelectedObject({ scale: Number(event.target.value) })}
+          className="w-full accent-sky-400"
+        />
+      </label>
+
+      <button
+        type="button"
+        onClick={deleteSelectedObject}
+        className="secondary-btn mt-5 min-h-11 w-full px-5 py-3 text-sm"
+      >
+        Delete Object
+      </button>
+    </div>
+  ) : (
+    <div className="rounded-[24px] border border-white/10 bg-white/5 p-4">
+      <p className="text-sm text-slate-300">Select an object from the scene list to edit placement.</p>
+    </div>
+  );
+
+  const addObjectButtons = (
+    <div className="grid grid-cols-2 gap-3">
+      {objectOptions.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          onClick={() => addObject(option.value)}
+          className="secondary-btn min-h-11 px-4 py-3 text-sm"
+        >
+          Add {option.label}
+        </button>
+      ))}
+    </div>
+  );
+
   return (
     <div className="pb-8">
       <div className="px-4 pt-4 md:px-6">
@@ -456,83 +768,17 @@ export function VisualizerShell() {
           id="visualizer"
           className="grid items-start gap-5 xl:grid-cols-[280px_minmax(0,1fr)]"
         >
-          <aside className="flex flex-col gap-6">
+          <aside className="hidden md:flex md:flex-col md:gap-6">
             <div className="panel rounded-[28px] p-5">
               <p className="section-kicker">Room template</p>
               <p className="mt-3 text-xl font-semibold text-slate-50">Choose the customer room scene</p>
-              <div className="mt-5 grid gap-3">
-                {roomTemplates.map((template) => (
-                  <button
-                    key={template.id}
-                    type="button"
-                    onClick={() => handleRoomChange(template.id)}
-                    data-active={room.id === template.id}
-                    className={`toggle-pill rounded-[24px] border px-4 py-4 text-left transition ${
-                      room.id === template.id
-                        ? "border-sky-400/50 bg-sky-400/10 text-white shadow-[0_0_24px_rgba(56,189,248,0.12)]"
-                        : "border-white/10 bg-white/4 text-slate-200 hover:bg-white/8"
-                    }`}
-                  >
-                    <p className="font-semibold text-current">{template.label}</p>
-                    <p className="mt-1 text-sm text-slate-300">{template.description}</p>
-                  </button>
-                ))}
-              </div>
+              <div className="mt-5">{roomSelectorContent}</div>
             </div>
 
             <div className="panel rounded-[28px] p-5">
               <p className="section-kicker">Surface actions</p>
               <p className="mt-3 text-xl font-semibold text-slate-50">Choose the exact tile target surface</p>
-              <div className="mt-5 grid gap-3">
-                {[
-                  {
-                    id: "floor" as SurfaceSelection,
-                    label: "Floor",
-                    copy: "Apply the active tile only to the floor.",
-                  },
-                  {
-                    id: "left-wall" as SurfaceSelection,
-                    label: "Left Wall",
-                    copy: "Apply the active tile only to the left wall.",
-                  },
-                  {
-                    id: "right-wall" as SurfaceSelection,
-                    label: "Right Wall",
-                    copy: "Apply the active tile only to the right wall.",
-                  },
-                  {
-                    id: "back-wall" as SurfaceSelection,
-                    label: "Back Wall",
-                    copy: "Apply the active tile only to the back wall.",
-                  },
-                  {
-                    id: "all-walls" as SurfaceSelection,
-                    label: "All Walls",
-                    copy: "Apply the active tile across every wall surface.",
-                  },
-                ].map((surface) => {
-                  const isActive = surfaceTarget === surface.id;
-
-                  return (
-                    <button
-                      key={surface.id}
-                      type="button"
-                      onClick={() => setSurfaceTarget(surface.id)}
-                      data-active={isActive}
-                      className={`toggle-pill rounded-[24px] px-4 py-4 text-left transition ${
-                        isActive
-                          ? "bg-gradient-to-r from-blue-600 to-sky-500 text-white shadow-[0_14px_30px_rgba(37,99,235,0.24)]"
-                          : "bg-white/5 text-slate-200 hover:bg-white/8"
-                      }`}
-                    >
-                      <p className="text-sm font-semibold">{surface.label}</p>
-                      <p className={`mt-1 text-sm ${isActive ? "text-slate-100/90" : "text-slate-300"}`}>
-                        {surface.copy}
-                      </p>
-                    </button>
-                  );
-                })}
-              </div>
+              <div className="mt-5">{surfaceSelectorContent}</div>
             </div>
 
             <div className="panel rounded-[28px] p-5">
@@ -610,10 +856,62 @@ export function VisualizerShell() {
                   onCanvasReady={setCanvasElement}
                   showCameraButtons
                   hideDecor
-                  helperText="Left drag: rotate / Wheel: zoom / Right drag: pan"
+                  helperText="Drag to rotate · Pinch/Wheel to zoom · Right drag to pan"
                 />
 
-                <div className="grid gap-4 md:grid-cols-3">
+                <div className="panel rounded-[22px] p-4 md:hidden">
+                  <p className="text-sm font-medium text-slate-100">Drag to rotate · Pinch to zoom</p>
+                </div>
+
+                <div className="grid gap-3 md:hidden">
+                  <AccordionSection
+                    title="Room selector"
+                    subtitle={`${room.label} · ${room.widthM}m x ${room.depthM}m x ${room.heightM}m`}
+                    defaultOpen
+                  >
+                    {roomSelectorContent}
+                  </AccordionSection>
+
+                  <AccordionSection
+                    title="Surface selector"
+                    subtitle={`Active target: ${targetLabel}`}
+                    defaultOpen
+                  >
+                    {surfaceSelectorContent}
+                  </AccordionSection>
+
+                  <AccordionSection
+                    title="Tile catalog"
+                    subtitle={`${tiles.length} demo tiles`}
+                    defaultOpen
+                  >
+                    <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-2">
+                      {tiles.map((tile) => (
+                        <div key={tile.id} className="min-w-[220px] flex-none">
+                          <TileCard
+                            tile={tile}
+                            selected={selectedTileId === tile.id}
+                            targetLabel={targetLabel}
+                            onClick={() => applyTile(tile.id)}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </AccordionSection>
+
+                  <AccordionSection
+                    title="Objects"
+                    subtitle={`${placedObjects.length} staged objects`}
+                  >
+                    <div className="space-y-4">
+                      {sceneObjectsContent}
+                      {selectedObjectControls}
+                      {addObjectButtons}
+                    </div>
+                  </AccordionSection>
+                </div>
+
+                <div className="hidden gap-4 md:grid md:grid-cols-3">
                   <div className="panel panel-hover rounded-[26px] p-5">
                     <p className="section-kicker">Floor tile</p>
                     <p className="mt-3 text-xl font-semibold text-slate-50">{floorTile?.name ?? "None selected"}</p>
@@ -639,7 +937,7 @@ export function VisualizerShell() {
                   </div>
                 </div>
 
-                <section className="panel rounded-[34px] p-5 md:p-6">
+                <section className="hidden rounded-[34px] p-5 md:block md:p-6">
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                     <div>
                       <p className="section-kicker">Demo catalog</p>
@@ -670,7 +968,7 @@ export function VisualizerShell() {
                 </section>
               </div>
 
-              <aside className="panel self-start rounded-[26px] p-4">
+              <aside className="panel hidden self-start rounded-[26px] p-4 md:block">
                 <p className="section-kicker">Objects</p>
                 <h3 className="mt-2 text-xl font-semibold text-slate-50">
                   Automatic room objects
@@ -685,209 +983,9 @@ export function VisualizerShell() {
                   </button>
                 </div>
 
-                <div className="mt-5 rounded-[24px] border border-white/10 bg-white/5 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">
-                    Scene objects
-                  </p>
-                  {placedObjects.length ? (
-                    <div className="mt-3 grid gap-2">
-                      {placedObjects.map((object, index) => {
-                        const isSelected = object.id === selectedObjectId;
-
-                        return (
-                          <button
-                            key={object.id}
-                            type="button"
-                            onClick={() => setSelectedObjectId(object.id)}
-                            className={`rounded-[18px] border px-4 py-3 text-left text-sm transition ${
-                              isSelected
-                                ? "border-sky-400/40 bg-sky-500/12 text-sky-100"
-                                : "border-white/10 bg-slate-950/45 text-slate-200 hover:border-white/20"
-                            }`}
-                          >
-                            <p className="font-semibold">
-                              {index + 1}. {getObjectLabel(object.type)}
-                            </p>
-                            <div className="mt-2">
-                              <span
-                                className={`rounded-full px-2.5 py-1 text-[0.62rem] font-semibold uppercase tracking-[0.14em] ${
-                                  objectRenderStates[object.id] === "gltf"
-                                    ? "border border-emerald-400/30 bg-emerald-500/12 text-emerald-200"
-                                    : "border border-amber-400/30 bg-amber-500/12 text-amber-200"
-                                }`}
-                              >
-                                {objectRenderStates[object.id] === "gltf" ? "Real model" : "Placeholder"}
-                              </span>
-                            </div>
-                            <p className="mt-1 text-xs text-slate-300">
-                              X {object.x.toFixed(2)} m / Z {object.z.toFixed(2)} m
-                            </p>
-                            {object.type === "table" && objectRenderStates[object.id] === "placeholder" ? (
-                              <p className="mt-2 text-xs font-medium text-rose-300">
-                                Failed to load table.glb
-                              </p>
-                            ) : null}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <p className="mt-3 text-sm text-slate-300">
-                      Empty Room starts without objects. Add any object manually if needed.
-                    </p>
-                  )}
-                </div>
-
-                {selectedObject ? (
-                  <div className="sticky top-20 mt-4 rounded-[24px] border border-white/10 bg-white/5 p-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">
-                      Selected object
-                    </p>
-                    <p className="mt-2 text-lg font-semibold text-slate-50">
-                      {getObjectLabel(selectedObject.type)}
-                    </p>
-                    <div className="mt-3">
-                      <span
-                        className={`rounded-full px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em] ${
-                          objectRenderStates[selectedObject.id] === "gltf"
-                            ? "border border-emerald-400/30 bg-emerald-500/12 text-emerald-200"
-                            : "border border-amber-400/30 bg-amber-500/12 text-amber-200"
-                        }`}
-                      >
-                        {objectRenderStates[selectedObject.id] === "gltf" ? "Real model" : "Placeholder"}
-                      </span>
-                    </div>
-                    {selectedObject.type === "table" && objectRenderStates[selectedObject.id] === "placeholder" ? (
-                      <p className="mt-3 text-sm font-medium text-rose-300">
-                        Failed to load table.glb
-                      </p>
-                    ) : null}
-
-                    <div className="mt-4 grid grid-cols-3 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => updateSelectedObject({ y: 0 })}
-                        className="secondary-btn px-3 py-2 text-xs"
-                      >
-                        Floor
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          updateSelectedObject({ y: Math.min(3, (selectedObject.y ?? 0) + 0.1) })
-                        }
-                        className="secondary-btn px-3 py-2 text-xs"
-                      >
-                        Raise
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          updateSelectedObject({ y: Math.max(-0.2, (selectedObject.y ?? 0) - 0.1) })
-                        }
-                        className="secondary-btn px-3 py-2 text-xs"
-                      >
-                        Lower
-                      </button>
-                    </div>
-
-                    <label className="mt-4 block">
-                      <span className="mb-2 block text-sm font-medium text-slate-200">
-                        X position {selectedObject.x.toFixed(2)} m
-                      </span>
-                      <input
-                        type="range"
-                        min={-room.widthM / 2 + 0.45}
-                        max={room.widthM / 2 - 0.45}
-                        step="0.05"
-                        value={selectedObject.x}
-                        onChange={(event) => updateSelectedObject({ x: Number(event.target.value) })}
-                        className="w-full accent-sky-400"
-                      />
-                    </label>
-
-                    <label className="mt-4 block">
-                      <span className="mb-2 block text-sm font-medium text-slate-200">
-                        Height / Y Position {(selectedObject.y ?? 0).toFixed(2)} m
-                      </span>
-                      <input
-                        type="range"
-                        min="-0.2"
-                        max="3"
-                        step="0.01"
-                        value={selectedObject.y ?? 0}
-                        onChange={(event) => updateSelectedObject({ y: Number(event.target.value) })}
-                        className="w-full accent-sky-400"
-                      />
-                    </label>
-
-                    <label className="mt-4 block">
-                      <span className="mb-2 block text-sm font-medium text-slate-200">
-                        Z position {selectedObject.z.toFixed(2)} m
-                      </span>
-                      <input
-                        type="range"
-                        min={-room.depthM / 2 + 0.45}
-                        max={room.depthM / 2 - 0.45}
-                        step="0.05"
-                        value={selectedObject.z}
-                        onChange={(event) => updateSelectedObject({ z: Number(event.target.value) })}
-                        className="w-full accent-sky-400"
-                      />
-                    </label>
-
-                    <label className="mt-4 block">
-                      <span className="mb-2 block text-sm font-medium text-slate-200">
-                        Rotation {Math.round(selectedObject.rotationDeg)} deg
-                      </span>
-                      <input
-                        type="range"
-                        min="0"
-                        max="360"
-                        step="1"
-                        value={selectedObject.rotationDeg}
-                        onChange={(event) => updateSelectedObject({ rotationDeg: Number(event.target.value) })}
-                        className="w-full accent-sky-400"
-                      />
-                    </label>
-
-                    <label className="mt-4 block">
-                      <span className="mb-2 block text-sm font-medium text-slate-200">
-                        Scale {selectedObject.scale.toFixed(2)}x
-                      </span>
-                      <input
-                        type="range"
-                        min="0.6"
-                        max="1.8"
-                        step="0.05"
-                        value={selectedObject.scale}
-                        onChange={(event) => updateSelectedObject({ scale: Number(event.target.value) })}
-                        className="w-full accent-sky-400"
-                      />
-                    </label>
-
-                    <button
-                      type="button"
-                      onClick={deleteSelectedObject}
-                      className="mt-5 secondary-btn w-full px-5 py-3 text-sm"
-                    >
-                      Delete Object
-                    </button>
-                  </div>
-                ) : null}
-
-                <div className="mt-4 grid grid-cols-2 gap-3">
-                  {objectOptions.map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => addObject(option.value)}
-                      className="secondary-btn px-4 py-3 text-sm"
-                    >
-                      Add {option.label}
-                    </button>
-                  ))}
-                </div>
+                <div className="mt-5">{sceneObjectsContent}</div>
+                <div className="mt-4">{selectedObjectControls}</div>
+                <div className="mt-4">{addObjectButtons}</div>
               </aside>
             </div>
           </section>

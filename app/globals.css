@@ -29,6 +29,7 @@ body {
   position: relative;
   margin: 0;
   min-height: 100vh;
+  overflow-x: hidden;
   background:
     radial-gradient(circle at top left, rgba(56, 189, 248, 0.18), transparent 28%),
     radial-gradient(circle at top right, rgba(96, 165, 250, 0.16), transparent 24%),
@@ -85,6 +86,7 @@ optgroup {
 
 button {
   cursor: pointer;
+  touch-action: manipulation;
 }
 
 .panel {
@@ -175,6 +177,7 @@ button {
 .primary-btn,
 .secondary-btn,
 .danger-btn {
+  min-height: 44px;
   border-radius: 9999px;
   font-weight: 700;
   transition:
@@ -255,6 +258,7 @@ button {
   overflow: hidden;
   border-radius: 28px;
   text-align: left;
+  min-width: 0;
   transition:
     transform 220ms ease,
     box-shadow 220ms ease,

@@ -1282,7 +1282,7 @@ export function RoomViewer({
   };
 
   return (
-    <div className="viewer-frame relative h-[380px] rounded-[30px] sm:h-[460px] lg:h-[600px] xl:h-[640px]">
+    <div className="viewer-frame relative h-[58vh] min-h-[360px] max-h-[65vh] rounded-[30px] md:h-[460px] md:min-h-0 md:max-h-none lg:h-[600px] xl:h-[640px]">
       <Canvas
         shadows
         camera={{ position: room.cameraPosition, fov: 42 }}
