@@ -1,0 +1,47 @@
+[
+  {
+    "id": "travertine-sand",
+    "name": "Travertine Sand",
+    "image": "/tiles/travertine-sand.svg",
+    "widthCm": 60,
+    "heightCm": 60,
+    "finish": "Matte",
+    "tone": "Warm Beige"
+  },
+  {
+    "id": "concrete-cloud",
+    "name": "Concrete Cloud",
+    "image": "/tiles/concrete-cloud.svg",
+    "widthCm": 80,
+    "heightCm": 80,
+    "finish": "Matte",
+    "tone": "Soft Grey"
+  },
+  {
+    "id": "marble-ivory",
+    "name": "Marble Ivory",
+    "image": "/tiles/marble-ivory.svg",
+    "widthCm": 60,
+    "heightCm": 120,
+    "finish": "Polished",
+    "tone": "Ivory"
+  },
+  {
+    "id": "slate-graphite",
+    "name": "Slate Graphite",
+    "image": "/tiles/slate-graphite.svg",
+    "widthCm": 30,
+    "heightCm": 60,
+    "finish": "Textured",
+    "tone": "Dark Grey"
+  },
+  {
+    "id": "terrazzo-sun",
+    "name": "Terrazzo Sun",
+    "image": "/tiles/terrazzo-sun.svg",
+    "widthCm": 45,
+    "heightCm": 45,
+    "finish": "Matte",
+    "tone": "Cream Mix"
+  }
+]
