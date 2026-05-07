@@ -176,7 +176,6 @@ useGLTF.preload(OBJECT_MODEL_PATHS.vanity);
 useGLTF.preload(OBJECT_MODEL_PATHS.mirror);
 useGLTF.preload(OBJECT_MODEL_PATHS.counter);
 useGLTF.preload(OBJECT_MODEL_PATHS.sofa);
-useGLTF.preload(OBJECT_MODEL_PATHS.bed);
 useGLTF.preload(OBJECT_MODEL_PATHS.tv);
 useGLTF.preload(OBJECT_MODEL_PATHS.refrigerator);
 useGLTF.preload(OBJECT_MODEL_PATHS.microwave);
@@ -437,11 +436,21 @@ function useModelAvailability(modelPath: string) {
       .then((response) => {
         if (!cancelled) {
           setIsAvailable(response.ok);
+          if (process.env.NODE_ENV === "development") {
+            if (response.ok) {
+              console.info("Model path available:", modelPath);
+            } else {
+              console.warn("Model path unavailable:", modelPath);
+            }
+          }
         }
       })
       .catch(() => {
         if (!cancelled) {
           setIsAvailable(false);
+          if (process.env.NODE_ENV === "development") {
+            console.warn("Failed to check model path:", modelPath);
+          }
         }
       });
 
@@ -515,7 +524,9 @@ function RealGLBObject({
   onLoaded?: () => void;
 }) {
   useEffect(() => {
-    console.info("Loading GLB model:", modelPath);
+    if (process.env.NODE_ENV === "development") {
+      console.info("Loading GLB model:", modelPath);
+    }
   }, [modelPath]);
 
   const { scene } = useGLTF(modelPath);
@@ -525,7 +536,9 @@ function RealGLBObject({
   }, [scene, type]);
 
   useEffect(() => {
-    console.info("Loaded GLB model successfully", modelPath);
+    if (process.env.NODE_ENV === "development") {
+      console.info("Loaded GLB model successfully", modelPath);
+    }
     onLoaded?.();
   }, [modelPath, onLoaded]);
 
@@ -1282,7 +1295,7 @@ export function RoomViewer({
   };
 
   return (
-    <div className="viewer-frame relative h-[58vh] min-h-[360px] max-h-[65vh] rounded-[30px] md:h-[460px] md:min-h-0 md:max-h-none lg:h-[600px] xl:h-[640px]">
+    <div className="viewer-frame relative h-[58vh] min-h-[360px] max-h-[65vh] rounded-[30px] md:h-[500px] md:min-h-0 md:max-h-none lg:h-[620px] xl:h-[660px]">
       <Canvas
         shadows
         camera={{ position: room.cameraPosition, fov: 42 }}

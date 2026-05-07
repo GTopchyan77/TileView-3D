@@ -27,11 +27,28 @@ const objectOptions: Array<{ value: DemoObjectType; label: string }> = [
   { value: "sofa", label: "Sofa" },
   { value: "bed", label: "Bed" },
   { value: "tv", label: "TV" },
-  { value: "refrigerator", label: "Refrigerator" },
+  { value: "refrigerator", label: "Fridge" },
   { value: "microwave", label: "Microwave" },
   { value: "table", label: "Table" },
   { value: "wardrobe", label: "Wardrobe" },
 ];
+
+const objectIcons: Record<DemoObjectType, string> = {
+  sink: "🚰",
+  toilet: "🚽",
+  shower: "🚿",
+  vanity: "🪞",
+  mirror: "🪞",
+  counter: "🧱",
+  table: "🪑",
+  chair: "🪑",
+  sofa: "🛋",
+  bed: "🛏",
+  tv: "📺",
+  refrigerator: "🧊",
+  microwave: "📦",
+  wardrobe: "🚪",
+};
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
@@ -69,11 +86,9 @@ function createRoomObjects(roomId: RoomTemplateId, widthM: number, depthM: numbe
 
   if (roomId === "bathroom") {
     return [
-      createObject("bathroom-shower-1", "shower", widthM / 2 - 0.78, -depthM / 2 + 0.78, 0, 0.98),
-      createObject("bathroom-toilet-1", "toilet", -widthM * 0.18, -depthM / 2 + 0.64, 12, 0.98),
-      createObject("bathroom-sink-1", "sink", -widthM / 2 + 0.5, -depthM / 2 + 0.56, 0, 0.92),
-      createObject("bathroom-vanity-1", "vanity", 0.34, -depthM / 2 + 0.58, 0, 0.98),
-      createObject("bathroom-mirror-1", "mirror", 0.34, -depthM / 2 + 0.09, 0, 0.82, 1.58, 0),
+      createObject("bathroom-shower-1", "shower", widthM / 2 - 0.72, -depthM / 2 + 0.72, 0, 0.96),
+      createObject("bathroom-toilet-1", "toilet", -widthM / 2 + 0.56, -depthM * 0.08, 90, 0.96),
+      createObject("bathroom-sink-1", "sink", widthM * 0.08, -depthM / 2 + 0.5, 0, 0.9),
     ];
   }
 
@@ -342,23 +357,26 @@ export function VisualizerShell() {
     const count = placedObjects.filter((object) => object.type === type).length;
     const xLimit = room.widthM / 2 - 0.55;
     const zLimit = room.depthM / 2 - 0.55;
+    const isWallMounted = type === "mirror" || type === "tv";
     nextObjectIdRef.current += 1;
     const nextObject: PlacedDemoObject = {
       id: `${room.id}-${type}-${nextObjectIdRef.current}-${count}`,
       type,
-      x:
-        type === "mirror"
-          ? 0
-          : clamp((count % 2 === 0 ? -0.3 : 0.3) + count * 0.18, -xLimit, xLimit),
-      y: type === "mirror" ? 1.55 : type === "tv" ? 1.24 : 0,
+      x: isWallMounted
+        ? clamp(count === 0 ? 0 : (count % 2 === 0 ? -0.55 : 0.55), -xLimit, xLimit)
+        : clamp((count % 2 === 0 ? -0.3 : 0.3) + count * 0.18, -xLimit, xLimit),
+      y: type === "mirror" ? 1.62 : type === "tv" ? 1.48 : 0,
       z:
-        type === "mirror"
+        isWallMounted
           ? -zLimit
-          : type === "tv"
-            ? zLimit
-            : clamp(0.18 + count * 0.16, -zLimit, zLimit),
-      rotationDeg: type === "counter" || type === "wardrobe" ? -90 : type === "tv" ? 180 : 0,
-      scale: type === "mirror" ? 0.82 : type === "tv" ? 0.96 : 1,
+          : clamp(0.18 + count * 0.16, -zLimit, zLimit),
+      rotationDeg:
+        type === "counter" || type === "wardrobe"
+          ? -90
+          : type === "tv" || type === "mirror"
+            ? 0
+            : 0,
+      scale: type === "mirror" ? 0.78 : type === "tv" ? 0.9 : 1,
       modelYOffset: type === "microwave" ? 0.92 : 0,
     };
 
@@ -514,6 +532,11 @@ export function VisualizerShell() {
                 <p className="mt-1 text-xs text-slate-300">
                   X {object.x.toFixed(2)} m / Z {object.z.toFixed(2)} m
                 </p>
+                {objectRenderStates[object.id] === "placeholder" && object.type !== "table" ? (
+                  <p className="mt-2 text-xs font-medium text-amber-300">
+                    Model missing or failed to load
+                  </p>
+                ) : null}
                 {object.type === "table" && objectRenderStates[object.id] === "placeholder" ? (
                   <p className="mt-2 text-xs font-medium text-rose-300">
                     Failed to load table.glb
@@ -532,14 +555,14 @@ export function VisualizerShell() {
   );
 
   const selectedObjectControls = selectedObject ? (
-    <div className="rounded-[24px] border border-white/10 bg-white/5 p-4 md:sticky md:top-20">
+    <div className="rounded-[22px] border border-white/10 bg-white/5 p-3.5 md:sticky md:top-20">
       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">
         Selected object
       </p>
-      <p className="mt-2 text-lg font-semibold text-slate-50">
+      <p className="mt-1.5 text-base font-semibold text-slate-50">
         {getObjectLabel(selectedObject.type)}
       </p>
-      <div className="mt-3">
+      <div className="mt-2.5">
         <span
           className={`rounded-full px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em] ${
             objectRenderStates[selectedObject.id] === "gltf"
@@ -551,16 +574,21 @@ export function VisualizerShell() {
         </span>
       </div>
       {selectedObject.type === "table" && objectRenderStates[selectedObject.id] === "placeholder" ? (
-        <p className="mt-3 text-sm font-medium text-rose-300">
+        <p className="mt-2.5 text-sm font-medium text-rose-300">
           Failed to load table.glb
         </p>
       ) : null}
+      {objectRenderStates[selectedObject.id] === "placeholder" && selectedObject.type !== "table" ? (
+        <p className="mt-2.5 text-sm font-medium text-amber-300">
+          Model missing or failed to load.
+        </p>
+      ) : null}
 
-      <div className="mt-4 grid grid-cols-3 gap-2">
+      <div className="mt-3 grid grid-cols-3 gap-2">
         <button
           type="button"
           onClick={() => updateSelectedObject({ y: 0 })}
-          className="secondary-btn min-h-11 px-3 py-2 text-xs"
+          className="secondary-btn min-h-10 rounded-[14px] px-3 py-2 text-xs"
         >
           Floor
         </button>
@@ -569,7 +597,7 @@ export function VisualizerShell() {
           onClick={() =>
             updateSelectedObject({ y: Math.min(3, (selectedObject.y ?? 0) + 0.1) })
           }
-          className="secondary-btn min-h-11 px-3 py-2 text-xs"
+          className="secondary-btn min-h-10 rounded-[14px] px-3 py-2 text-xs"
         >
           Raise
         </button>
@@ -578,13 +606,13 @@ export function VisualizerShell() {
           onClick={() =>
             updateSelectedObject({ y: Math.max(-0.2, (selectedObject.y ?? 0) - 0.1) })
           }
-          className="secondary-btn min-h-11 px-3 py-2 text-xs"
+          className="secondary-btn min-h-10 rounded-[14px] px-3 py-2 text-xs"
         >
           Lower
         </button>
       </div>
 
-      <label className="mt-4 block">
+      <label className="mt-3 block">
         <span className="mb-2 block text-sm font-medium text-slate-200">
           X position {selectedObject.x.toFixed(2)} m
         </span>
@@ -599,7 +627,7 @@ export function VisualizerShell() {
         />
       </label>
 
-      <label className="mt-4 block">
+      <label className="mt-3 block">
         <span className="mb-2 block text-sm font-medium text-slate-200">
           Height / Y Position {(selectedObject.y ?? 0).toFixed(2)} m
         </span>
@@ -614,7 +642,7 @@ export function VisualizerShell() {
         />
       </label>
 
-      <label className="mt-4 block">
+      <label className="mt-3 block">
         <span className="mb-2 block text-sm font-medium text-slate-200">
           Z position {selectedObject.z.toFixed(2)} m
         </span>
@@ -629,7 +657,7 @@ export function VisualizerShell() {
         />
       </label>
 
-      <label className="mt-4 block">
+      <label className="mt-3 block">
         <span className="mb-2 block text-sm font-medium text-slate-200">
           Rotation {Math.round(selectedObject.rotationDeg)} deg
         </span>
@@ -644,7 +672,7 @@ export function VisualizerShell() {
         />
       </label>
 
-      <label className="mt-4 block">
+      <label className="mt-3 block">
         <span className="mb-2 block text-sm font-medium text-slate-200">
           Scale {selectedObject.scale.toFixed(2)}x
         </span>
@@ -662,7 +690,7 @@ export function VisualizerShell() {
       <button
         type="button"
         onClick={deleteSelectedObject}
-        className="secondary-btn mt-5 min-h-11 w-full px-5 py-3 text-sm"
+        className="secondary-btn mt-4 min-h-10 w-full rounded-[14px] px-4 py-2.5 text-sm"
       >
         Delete Object
       </button>
@@ -674,17 +702,24 @@ export function VisualizerShell() {
   );
 
   const addObjectButtons = (
-    <div className="grid grid-cols-2 gap-3">
-      {objectOptions.map((option) => (
-        <button
-          key={option.value}
-          type="button"
-          onClick={() => addObject(option.value)}
-          className="secondary-btn min-h-11 px-4 py-3 text-sm"
-        >
-          Add {option.label}
-        </button>
-      ))}
+    <div className="rounded-[22px] border border-white/10 bg-white/5 p-3.5">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">Add objects</p>
+        <span className="text-xs text-slate-400">Manual placement</span>
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-2.5">
+        {objectOptions.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => addObject(option.value)}
+            className="flex min-h-10 items-center justify-start gap-2 rounded-[14px] border border-white/10 bg-slate-950/45 px-3 py-2 text-left text-[13px] font-medium text-slate-100 transition hover:border-white/20 hover:bg-white/8 hover:text-white active:translate-y-[1px]"
+          >
+            <span className="text-base leading-none">{objectIcons[option.value]}</span>
+            <span className="whitespace-nowrap leading-none">{option.label}</span>
+          </button>
+        ))}
+      </div>
     </div>
   );
 
@@ -694,54 +729,51 @@ export function VisualizerShell() {
         <SiteNav />
       </div>
 
-      <main className="mx-auto flex min-h-screen max-w-[1600px] flex-col gap-6 px-4 py-5 md:px-6 md:py-6">
-        <section className="panel fade-in-up overflow-hidden rounded-[36px] p-6 md:p-8 xl:p-10">
-          <div className="grid gap-8 xl:grid-cols-[minmax(0,1.3fr)_380px] xl:items-end">
-            <div className="max-w-4xl">
+      <main className="mx-auto flex min-h-screen w-full max-w-[1600px] flex-col gap-4 px-4 py-4 md:px-6 md:py-5">
+        <section className="panel fade-in-up overflow-hidden rounded-[32px] p-5 md:p-6">
+          <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
+            <div className="max-w-3xl">
               <p className="section-kicker">3D Showroom Demo</p>
-              <h1 className="display-title mt-4 text-4xl font-semibold text-white md:text-6xl">
+              <h1 className="display-title mt-3 text-3xl font-semibold text-white md:text-5xl">
                 3D Tile Room Visualizer
               </h1>
-              <p className="mt-5 max-w-2xl text-base leading-7 text-slate-200 md:text-lg">
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-200 md:text-base">
                 Preview floor and wall tiles in staged 3D room types with automatic object placement before buying.
               </p>
-              <div className="mt-6 flex flex-wrap gap-3">
-                <button type="button" onClick={requestQuote} className="primary-btn px-6 py-3 text-sm">
-                  Request Quote
-                </button>
-                <button type="button" onClick={exportScreenshot} className="secondary-btn px-6 py-3 text-sm">
-                  Export Preview Image
-                </button>
-              </div>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-3 xl:grid-cols-1">
-              <div className="panel panel-hover rounded-[28px] bg-slate-950/60 p-5 text-white">
+            <div className="flex flex-wrap gap-3 xl:justify-end">
+                <button type="button" onClick={requestQuote} className="primary-btn px-5 py-3 text-sm">
+                  Request Quote
+                </button>
+                <button type="button" onClick={exportScreenshot} className="secondary-btn px-5 py-3 text-sm">
+                  Export Preview Image
+                </button>
+            </div>
+          </div>
+
+            <div className="mt-5 grid gap-3 sm:grid-cols-3">
+              <div className="panel panel-hover rounded-[24px] bg-slate-950/60 p-4 text-white">
                 <p className="text-xs uppercase tracking-[0.2em] text-sky-200">Demo catalog</p>
-                <p className="mt-3 text-3xl font-semibold">{tiles.length}</p>
-                <p className="mt-2 text-sm text-slate-300">
-                  Local tile options ready for showroom comparison.
-                </p>
+                <p className="mt-2 text-2xl font-semibold">{tiles.length}</p>
+                <p className="mt-1 text-xs text-slate-300">Local tile options ready for comparison.</p>
               </div>
-              <div className="panel panel-hover rounded-[28px] p-5">
+              <div className="panel panel-hover rounded-[24px] p-4">
                 <p className="text-xs uppercase tracking-[0.2em] text-sky-200">Room template</p>
-                <p className="mt-3 text-xl font-semibold text-slate-50">{room.label}</p>
-                <p className="mt-2 text-sm text-slate-300">
+                <p className="mt-2 text-lg font-semibold text-slate-50">{room.label}</p>
+                <p className="mt-1 text-xs text-slate-300">
                   {room.widthM}m x {room.depthM}m x {room.heightM}m
                 </p>
               </div>
-              <div className="panel panel-hover rounded-[28px] p-5">
+              <div className="panel panel-hover rounded-[24px] p-4">
                 <p className="text-xs uppercase tracking-[0.2em] text-sky-200">Active surface</p>
-                <p className="mt-3 text-xl font-semibold capitalize text-slate-50">{targetLabel}</p>
-                <p className="mt-2 text-sm text-slate-300">
-                  Choose exact surfaces before selecting a tile from the catalog below.
-                </p>
+                <p className="mt-2 text-lg font-semibold capitalize text-slate-50">{targetLabel}</p>
+                <p className="mt-1 text-xs text-slate-300">Choose exact surfaces before selecting a tile.</p>
               </div>
             </div>
-          </div>
         </section>
 
-        <section className="fade-in-up-delayed grid gap-4 md:grid-cols-3">
+        <section className="fade-in-up-delayed grid gap-3 md:grid-cols-3">
           {[
             {
               title: "Choose a room",
@@ -756,17 +788,17 @@ export function VisualizerShell() {
               body: "Adjust object placement, orbit the scene, compare finishes, and export a preview image.",
             },
           ].map((step, index) => (
-            <div key={step.title} className="panel panel-hover rounded-[28px] p-5">
+            <div key={step.title} className="panel panel-hover rounded-[24px] p-4">
               <p className="section-kicker">Step {index + 1}</p>
-              <p className="mt-3 text-xl font-semibold text-slate-50">{step.title}</p>
-              <p className="mt-2 text-sm leading-6 text-slate-300">{step.body}</p>
+              <p className="mt-2 text-lg font-semibold text-slate-50">{step.title}</p>
+              <p className="mt-1 text-sm leading-6 text-slate-300">{step.body}</p>
             </div>
           ))}
         </section>
 
         <section
           id="visualizer"
-          className="grid items-start gap-5 xl:grid-cols-[280px_minmax(0,1fr)]"
+          className="grid items-start gap-4 xl:grid-cols-[270px_minmax(0,1fr)]"
         >
           <aside className="hidden md:flex md:flex-col md:gap-6">
             <div className="panel rounded-[28px] p-5">
@@ -817,7 +849,7 @@ export function VisualizerShell() {
           </aside>
 
           <section className="flex flex-col gap-5">
-            <div className="panel rounded-[28px] p-4">
+            <div className="panel rounded-[26px] p-3 md:p-4">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div>
                   <p className="section-kicker">3D preview</p>
@@ -838,7 +870,7 @@ export function VisualizerShell() {
               </div>
             </div>
 
-            <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_280px]">
+            <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
               <div className="flex min-w-0 flex-col gap-4">
                 <RoomViewer
                   room={room}
@@ -968,7 +1000,7 @@ export function VisualizerShell() {
                 </section>
               </div>
 
-              <aside className="panel hidden self-start rounded-[26px] p-4 md:block">
+              <aside className="panel hidden min-w-[320px] self-start rounded-[26px] p-4 md:block">
                 <p className="section-kicker">Objects</p>
                 <h3 className="mt-2 text-xl font-semibold text-slate-50">
                   Automatic room objects
@@ -983,9 +1015,9 @@ export function VisualizerShell() {
                   </button>
                 </div>
 
-                <div className="mt-5">{sceneObjectsContent}</div>
-                <div className="mt-4">{selectedObjectControls}</div>
-                <div className="mt-4">{addObjectButtons}</div>
+                <div className="mt-4">{sceneObjectsContent}</div>
+                <div className="mt-3">{selectedObjectControls}</div>
+                <div className="mt-3">{addObjectButtons}</div>
               </aside>
             </div>
           </section>
