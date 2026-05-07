@@ -6,6 +6,9 @@ import { SiteNav } from "@/components/site-nav";
 import { useTiles } from "@/hooks/use-tiles";
 import { Tile } from "@/types/tile";
 
+const ACCEPTED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp"];
+const MAX_UPLOAD_SIZE_BYTES = 5 * 1024 * 1024;
+
 const defaultForm = {
   name: "",
   imageUrl: "",
@@ -15,7 +18,17 @@ const defaultForm = {
   tone: "Custom",
 };
 
-function TileThumbnail({ src, alt, className }: { src: string; alt: string; className?: string }) {
+function TileThumbnail({
+  src,
+  alt,
+  className,
+  errorLabel = "Image unavailable",
+}: {
+  src: string;
+  alt: string;
+  className?: string;
+  errorLabel?: string;
+}) {
   const [hasError, setHasError] = useState(false);
   const imageSrc = hasError || !src ? "/tiles/placeholder.svg" : src;
 
@@ -32,7 +45,7 @@ function TileThumbnail({ src, alt, className }: { src: string; alt: string; clas
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/28 to-transparent" />
       {hasError ? (
         <div className="absolute inset-0 flex items-center justify-center bg-slate-950/80 text-center text-xs font-medium text-slate-300">
-          Image unavailable
+          {errorLabel}
         </div>
       ) : null}
     </div>
@@ -58,68 +71,99 @@ export default function AdminPage() {
       return;
     }
 
-    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
-      setErrorMessage("Please upload a JPG, PNG, or WEBP image.");
+    if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
+      setErrorMessage("Please upload a JPG, PNG, or WEBP image file.");
       setUploadedImageDataUrl("");
       setUploadedFileName("");
+      event.target.value = "";
+      setFileInputKey((current) => current + 1);
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = typeof reader.result === "string" ? reader.result : "";
-      setUploadedImageDataUrl(result);
-      setUploadedFileName(file.name);
-      setErrorMessage("");
-    };
-    reader.onerror = () => {
-      setErrorMessage("The selected image could not be read.");
+    if (file.size > MAX_UPLOAD_SIZE_BYTES) {
+      setErrorMessage("Please upload an image under 5MB for this demo.");
       setUploadedImageDataUrl("");
       setUploadedFileName("");
-    };
-    reader.readAsDataURL(file);
+      event.target.value = "";
+      setFileInputKey((current) => current + 1);
+      return;
+    }
+
+    try {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = typeof reader.result === "string" ? reader.result : "";
+
+        if (!result) {
+          setErrorMessage("Image preview failed.");
+          setUploadedImageDataUrl("");
+          setUploadedFileName("");
+          return;
+        }
+
+        setUploadedImageDataUrl(result);
+        setUploadedFileName(file.name);
+        setErrorMessage("");
+      };
+      reader.onerror = () => {
+        setErrorMessage("The selected image could not be read.");
+        setUploadedImageDataUrl("");
+        setUploadedFileName("");
+      };
+      reader.readAsDataURL(file);
+    } catch {
+      setErrorMessage("The selected image could not be processed.");
+      setUploadedImageDataUrl("");
+      setUploadedFileName("");
+      event.target.value = "";
+      setFileInputKey((current) => current + 1);
+    }
   };
 
   const submitForm = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    const name = form.name.trim();
-    const imageUrl = form.imageUrl.trim();
-    const image = uploadedImageDataUrl || imageUrl;
-    const widthCm = Number(form.widthCm);
-    const heightCm = Number(form.heightCm);
+    try {
+      const name = form.name.trim();
+      const imageUrl = form.imageUrl.trim();
+      const image = uploadedImageDataUrl || imageUrl;
+      const widthCm = Number(form.widthCm);
+      const heightCm = Number(form.heightCm);
 
-    if (!name) {
-      setErrorMessage("Tile name is required.");
-      return;
+      if (!name) {
+        setErrorMessage("Tile name is required.");
+        return;
+      }
+
+      if (!image) {
+        setErrorMessage("Either an uploaded image or an Image URL is required.");
+        return;
+      }
+
+      if (!Number.isFinite(widthCm) || widthCm <= 0 || !Number.isFinite(heightCm) || heightCm <= 0) {
+        setErrorMessage("Width and height must be positive numbers.");
+        return;
+      }
+
+      const tile: Tile = {
+        id: `${name.toLowerCase().replace(/\s+/g, "-")}-${Date.now()}`,
+        name,
+        image,
+        widthCm,
+        heightCm,
+        finish: form.finish.trim(),
+        tone: form.tone.trim(),
+      };
+
+      addTile(tile);
+      setErrorMessage("");
+      setForm(defaultForm);
+      setUploadedImageDataUrl("");
+      setUploadedFileName("");
+      setFileInputKey((current) => current + 1);
+    } catch {
+      setErrorMessage("The tile could not be imported. Please try again with a valid image.");
     }
-
-    if (!image) {
-      setErrorMessage("Either an uploaded image or an Image URL is required.");
-      return;
-    }
-
-    if (!Number.isFinite(widthCm) || widthCm <= 0 || !Number.isFinite(heightCm) || heightCm <= 0) {
-      setErrorMessage("Width and height must be positive numbers.");
-      return;
-    }
-
-    const tile: Tile = {
-      id: `${name.toLowerCase().replace(/\s+/g, "-")}-${Date.now()}`,
-      name,
-      image,
-      widthCm,
-      heightCm,
-      finish: form.finish.trim(),
-      tone: form.tone.trim(),
-    };
-
-    addTile(tile);
-    setErrorMessage("");
-    setForm(defaultForm);
-    setUploadedImageDataUrl("");
-    setUploadedFileName("");
-    setFileInputKey((current) => current + 1);
   };
 
   return (
@@ -177,12 +221,12 @@ export default function AdminPage() {
                 <input
                   key={fileInputKey}
                   type="file"
-                  accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+                  accept="image/png,image/jpeg,image/webp"
                   onChange={handleImageUpload}
                   className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-200 outline-none file:mr-4 file:rounded-full file:border-0 file:bg-slate-100 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-slate-900"
                 />
                 <span className="mt-2 block text-xs text-slate-300/80">
-                  Choose a JPG, PNG, or WEBP tile image from your computer.
+                  Choose a JPG, PNG, or WEBP tile image from your computer. Max 5MB.
                 </span>
                 {uploadedFileName ? (
                   <span className="mt-2 block text-xs font-medium text-sky-200">
@@ -210,6 +254,7 @@ export default function AdminPage() {
                 <TileThumbnail
                   src={previewImage}
                   alt="Imported tile preview"
+                  errorLabel="Image preview failed"
                   className="mt-3 h-28 w-full rounded-[18px] border border-white/10"
                 />
               </div>
