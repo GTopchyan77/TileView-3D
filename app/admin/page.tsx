@@ -4,6 +4,12 @@ import Image from "next/image";
 import { ChangeEvent, FormEvent, useState } from "react";
 import { SiteNav } from "@/components/site-nav";
 import { useTiles } from "@/hooks/use-tiles";
+import {
+  getSupabaseBrowserClient,
+  isSupabaseConfigured,
+  notifyCloudTilesChanged,
+  SUPABASE_TILE_BUCKET,
+} from "@/lib/supabase/client";
 import { Tile } from "@/types/tile";
 
 const ACCEPTED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp"];
@@ -53,14 +59,56 @@ function TileThumbnail({
 }
 
 export default function AdminPage() {
-  const { defaultTiles, customTiles, addTile, deleteCustomTile, resetCustomTiles } = useTiles();
+  const {
+    defaultTiles,
+    customTiles,
+    cloudTiles,
+    cloudConfigured,
+    addTile,
+    deleteCustomTile,
+    resetCustomTiles,
+  } = useTiles();
   const [form, setForm] = useState(defaultForm);
   const [errorMessage, setErrorMessage] = useState<string>("");
+  const [cloudMessage, setCloudMessage] = useState<string>(
+    isSupabaseConfigured() ? "" : "Cloud database is not configured. Using local demo storage.",
+  );
   const [uploadedImageDataUrl, setUploadedImageDataUrl] = useState<string>("");
   const [uploadedFileName, setUploadedFileName] = useState<string>("");
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [fileInputKey, setFileInputKey] = useState(0);
+  const [isSavingToCloud, setIsSavingToCloud] = useState(false);
 
   const previewImage = uploadedImageDataUrl || form.imageUrl;
+
+  const buildTileDraft = () => {
+    const name = form.name.trim();
+    const imageUrl = form.imageUrl.trim();
+    const image = uploadedImageDataUrl || imageUrl;
+    const widthCm = Number(form.widthCm);
+    const heightCm = Number(form.heightCm);
+
+    if (!name) {
+      throw new Error("Tile name is required.");
+    }
+
+    if (!image) {
+      throw new Error("Either an uploaded image or an Image URL is required.");
+    }
+
+    if (!Number.isFinite(widthCm) || widthCm <= 0 || !Number.isFinite(heightCm) || heightCm <= 0) {
+      throw new Error("Width and height must be positive numbers.");
+    }
+
+    return {
+      name,
+      image,
+      widthCm,
+      heightCm,
+      finish: form.finish.trim(),
+      tone: form.tone.trim(),
+    };
+  };
 
   const handleImageUpload = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -68,6 +116,7 @@ export default function AdminPage() {
     if (!file) {
       setUploadedImageDataUrl("");
       setUploadedFileName("");
+      setUploadedFile(null);
       return;
     }
 
@@ -75,6 +124,7 @@ export default function AdminPage() {
       setErrorMessage("Please upload a JPG, PNG, or WEBP image file.");
       setUploadedImageDataUrl("");
       setUploadedFileName("");
+      setUploadedFile(null);
       event.target.value = "";
       setFileInputKey((current) => current + 1);
       return;
@@ -84,6 +134,7 @@ export default function AdminPage() {
       setErrorMessage("Please upload an image under 5MB for this demo.");
       setUploadedImageDataUrl("");
       setUploadedFileName("");
+      setUploadedFile(null);
       event.target.value = "";
       setFileInputKey((current) => current + 1);
       return;
@@ -103,18 +154,21 @@ export default function AdminPage() {
 
         setUploadedImageDataUrl(result);
         setUploadedFileName(file.name);
+        setUploadedFile(file);
         setErrorMessage("");
       };
       reader.onerror = () => {
         setErrorMessage("The selected image could not be read.");
         setUploadedImageDataUrl("");
         setUploadedFileName("");
+        setUploadedFile(null);
       };
       reader.readAsDataURL(file);
     } catch {
       setErrorMessage("The selected image could not be processed.");
       setUploadedImageDataUrl("");
       setUploadedFileName("");
+      setUploadedFile(null);
       event.target.value = "";
       setFileInputKey((current) => current + 1);
     }
@@ -124,45 +178,91 @@ export default function AdminPage() {
     event.preventDefault();
 
     try {
-      const name = form.name.trim();
-      const imageUrl = form.imageUrl.trim();
-      const image = uploadedImageDataUrl || imageUrl;
-      const widthCm = Number(form.widthCm);
-      const heightCm = Number(form.heightCm);
-
-      if (!name) {
-        setErrorMessage("Tile name is required.");
-        return;
-      }
-
-      if (!image) {
-        setErrorMessage("Either an uploaded image or an Image URL is required.");
-        return;
-      }
-
-      if (!Number.isFinite(widthCm) || widthCm <= 0 || !Number.isFinite(heightCm) || heightCm <= 0) {
-        setErrorMessage("Width and height must be positive numbers.");
-        return;
-      }
+      const draft = buildTileDraft();
 
       const tile: Tile = {
-        id: `${name.toLowerCase().replace(/\s+/g, "-")}-${Date.now()}`,
-        name,
-        image,
-        widthCm,
-        heightCm,
-        finish: form.finish.trim(),
-        tone: form.tone.trim(),
+        id: `${draft.name.toLowerCase().replace(/\s+/g, "-")}-${Date.now()}`,
+        name: draft.name,
+        image: draft.image,
+        widthCm: draft.widthCm,
+        heightCm: draft.heightCm,
+        finish: draft.finish,
+        tone: draft.tone,
       };
 
       addTile(tile);
       setErrorMessage("");
+      setCloudMessage(cloudConfigured ? cloudMessage : "Cloud database is not configured. Using local demo storage.");
       setForm(defaultForm);
       setUploadedImageDataUrl("");
       setUploadedFileName("");
+      setUploadedFile(null);
       setFileInputKey((current) => current + 1);
-    } catch {
-      setErrorMessage("The tile could not be imported. Please try again with a valid image.");
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "The tile could not be imported. Please try again with a valid image.");
+    }
+  };
+
+  const saveTileToCloud = async () => {
+    if (!cloudConfigured) {
+      setCloudMessage("Cloud database is not configured. Using local demo storage.");
+      return;
+    }
+
+    setIsSavingToCloud(true);
+    setErrorMessage("");
+
+    try {
+      const client = getSupabaseBrowserClient();
+
+      if (!client) {
+        throw new Error("Cloud database is not configured. Using local demo storage.");
+      }
+
+      const draft = buildTileDraft();
+      let imageUrl = form.imageUrl.trim();
+
+      if (uploadedFile) {
+        const extension = uploadedFile.name.split(".").pop()?.toLowerCase() || "jpg";
+        const storagePath = `tiles/${Date.now()}-${draft.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.${extension}`;
+        const { error: uploadError } = await client.storage
+          .from(SUPABASE_TILE_BUCKET)
+          .upload(storagePath, uploadedFile, {
+            cacheControl: "3600",
+            upsert: false,
+            contentType: uploadedFile.type,
+          });
+
+        if (uploadError) {
+          throw uploadError;
+        }
+
+        const { data: publicUrlData } = client.storage
+          .from(SUPABASE_TILE_BUCKET)
+          .getPublicUrl(storagePath);
+
+        imageUrl = publicUrlData.publicUrl;
+      }
+
+      const { error: insertError } = await client.from("tiles").insert({
+        name: draft.name,
+        image_url: imageUrl || draft.image,
+        width_cm: draft.widthCm,
+        height_cm: draft.heightCm,
+        finish: draft.finish || null,
+        tone: draft.tone || null,
+      });
+
+      if (insertError) {
+        throw insertError;
+      }
+
+      notifyCloudTilesChanged();
+      setCloudMessage("Saved to cloud database.");
+    } catch (error) {
+      setCloudMessage(error instanceof Error ? error.message : "Cloud save failed.");
+    } finally {
+      setIsSavingToCloud(false);
     }
   };
 
@@ -184,9 +284,14 @@ export default function AdminPage() {
                 This page stays local-only for demo day. Imported tiles persist in browser storage,
                 bundled demo tiles remain read-only, and custom entries appear in the visualizer after refresh.
               </p>
+              {cloudMessage ? (
+                <p className="mt-3 text-sm text-sky-200">{cloudMessage}</p>
+              ) : null}
             </div>
             <div className="glass-chip rounded-[24px] px-5 py-4 text-sm text-slate-300">
-              <p className="font-semibold text-slate-50">{defaultTiles.length + customTiles.length} tiles available</p>
+              <p className="font-semibold text-slate-50">
+                {defaultTiles.length + customTiles.length + cloudTiles.length} tiles available
+              </p>
               <p className="mt-1">Use this page to expand the demo catalog on the fly.</p>
             </div>
           </div>
@@ -310,9 +415,19 @@ export default function AdminPage() {
                 {errorMessage}
               </div>
             ) : null}
-            <button type="submit" className="primary-btn mt-5 w-full px-5 py-3 text-sm">
-              Import Tile
-            </button>
+            <div className="mt-5 grid gap-3">
+              <button type="submit" className="primary-btn w-full px-5 py-3 text-sm">
+                Import Tile
+              </button>
+              <button
+                type="button"
+                onClick={() => void saveTileToCloud()}
+                disabled={isSavingToCloud}
+                className="secondary-btn w-full px-5 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSavingToCloud ? "Saving..." : "Save to Cloud"}
+              </button>
+            </div>
           </form>
 
           <div className="grid gap-6">
@@ -328,6 +443,9 @@ export default function AdminPage() {
                 <div className="flex items-center gap-3">
                   <span className="rounded-full border border-sky-400/20 bg-sky-400/10 px-3 py-1 text-xs font-medium text-sky-200">
                     {customTiles.length} custom
+                  </span>
+                  <span className="rounded-full border border-white/10 bg-white/6 px-3 py-1 text-xs font-medium text-slate-200">
+                    {cloudTiles.length} cloud
                   </span>
                   <button
                     type="button"

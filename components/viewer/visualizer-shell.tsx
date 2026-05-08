@@ -6,16 +6,20 @@ import type { ReactNode } from "react";
 import { SiteNav } from "@/components/site-nav";
 import { useTiles } from "@/hooks/use-tiles";
 import { roomTemplates } from "@/lib/room-templates";
+import { SAVED_SCENE_STORAGE_KEY } from "@/lib/storage";
+import { getSupabaseBrowserClient, isSupabaseConfigured, mapCloudScene } from "@/lib/supabase/client";
 import {
   DemoObjectType,
   PlacedDemoObject,
   RoomTemplateId,
+  SavedSceneData,
+  SceneSurfaceSelection,
   Tile,
   WallSurfaceId,
 } from "@/types/tile";
 import { RoomViewer } from "./room-viewer";
 
-type SurfaceSelection = "floor" | "left-wall" | "right-wall" | "back-wall" | "all-walls";
+type SurfaceSelection = SceneSurfaceSelection;
 
 const objectOptions: Array<{ value: DemoObjectType; label: string }> = [
   { value: "sink", label: "Sink" },
@@ -49,6 +53,90 @@ const objectIcons: Record<DemoObjectType, string> = {
   microwave: "📦",
   wardrobe: "🚪",
 };
+
+const VALID_ROOM_TYPES = new Set<RoomTemplateId>(roomTemplates.map((template) => template.id));
+const VALID_SURFACE_TARGETS = new Set<SurfaceSelection>([
+  "floor",
+  "left-wall",
+  "right-wall",
+  "back-wall",
+  "all-walls",
+]);
+const VALID_OBJECT_TYPES = new Set<DemoObjectType>(objectOptions.map((option) => option.value));
+
+function isRoomTemplateId(value: string): value is RoomTemplateId {
+  return VALID_ROOM_TYPES.has(value as RoomTemplateId);
+}
+
+function isSurfaceSelection(value: string): value is SurfaceSelection {
+  return VALID_SURFACE_TARGETS.has(value as SurfaceSelection);
+}
+
+function parseSavedSceneData(value: string | null): SavedSceneData | null {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(value) as Partial<SavedSceneData> | null;
+
+    if (
+      !parsed ||
+      typeof parsed !== "object" ||
+      typeof parsed.name !== "string" ||
+      !isRoomTemplateId(String(parsed.roomType)) ||
+      !isSurfaceSelection(String(parsed.activeSurface)) ||
+      typeof parsed.floorTileId !== "string" ||
+      typeof parsed.leftWallTileId !== "string" ||
+      typeof parsed.rightWallTileId !== "string" ||
+      typeof parsed.backWallTileId !== "string" ||
+      !Array.isArray(parsed.objects)
+    ) {
+      return null;
+    }
+
+    const objects = parsed.objects
+      .map((item) => {
+        if (
+          !item ||
+          typeof item !== "object" ||
+          typeof item.id !== "string" ||
+          !VALID_OBJECT_TYPES.has(item.type as DemoObjectType) ||
+          typeof item.x !== "number" ||
+          typeof item.z !== "number" ||
+          typeof item.rotationDeg !== "number" ||
+          typeof item.scale !== "number"
+        ) {
+          return null;
+        }
+
+        return {
+          id: item.id,
+          type: item.type as DemoObjectType,
+          x: item.x,
+          y: typeof item.y === "number" ? item.y : 0,
+          z: item.z,
+          rotationDeg: item.rotationDeg,
+          scale: item.scale,
+          modelYOffset: typeof item.modelYOffset === "number" ? item.modelYOffset : undefined,
+        };
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null);
+
+    return {
+      name: parsed.name,
+      roomType: parsed.roomType as RoomTemplateId,
+      activeSurface: parsed.activeSurface as SurfaceSelection,
+      floorTileId: parsed.floorTileId,
+      leftWallTileId: parsed.leftWallTileId,
+      rightWallTileId: parsed.rightWallTileId,
+      backWallTileId: parsed.backWallTileId,
+      objects,
+    };
+  } catch {
+    return null;
+  }
+}
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
@@ -218,7 +306,7 @@ function AccordionSection({
 }
 
 export function VisualizerShell() {
-  const { tiles } = useTiles();
+  const { tiles, cloudConfigured, cloudError } = useTiles();
   const [roomId, setRoomId] = useState<RoomTemplateId>("bathroom");
   const [surfaceTarget, setSurfaceTarget] = useState<SurfaceSelection>("floor");
   const [floorTileId, setFloorTileId] = useState<string>("travertine-sand");
@@ -244,6 +332,9 @@ export function VisualizerShell() {
     ),
   );
   const nextObjectIdRef = useRef(0);
+  const [sceneStatus, setSceneStatus] = useState<string>("");
+  const [isSavingSceneToCloud, setIsSavingSceneToCloud] = useState(false);
+  const [isLoadingCloudScene, setIsLoadingCloudScene] = useState(false);
 
   const room = useMemo(
     () => roomTemplates.find((item) => item.id === roomId) ?? roomTemplates[0],
@@ -298,6 +389,157 @@ export function VisualizerShell() {
     return "all walls";
   }, [surfaceTarget]);
   const selectedObject = placedObjects.find((object) => object.id === selectedObjectId) ?? null;
+
+  const buildScenePayload = (): SavedSceneData => ({
+    name: `${room.label} Scene`,
+    roomType: room.id,
+    activeSurface: surfaceTarget,
+    floorTileId,
+    leftWallTileId: wallTileIds.left,
+    rightWallTileId: wallTileIds.right,
+    backWallTileId: wallTileIds.back,
+    objects: placedObjects.map((object) => ({
+      id: object.id,
+      type: object.type,
+      x: object.x,
+      y: object.y ?? 0,
+      z: object.z,
+      rotationDeg: object.rotationDeg,
+      scale: object.scale,
+      modelYOffset: object.modelYOffset,
+    })),
+  });
+
+  const applyScenePayload = (scene: SavedSceneData) => {
+    setRoomId(scene.roomType);
+    setSurfaceTarget(scene.activeSurface);
+    setFloorTileId(scene.floorTileId);
+    setWallTileIds({
+      left: scene.leftWallTileId,
+      right: scene.rightWallTileId,
+      back: scene.backWallTileId,
+    });
+    setPlacedObjects(scene.objects);
+    setSelectedObjectId(scene.objects[0]?.id ?? null);
+    setObjectRenderStates(
+      Object.fromEntries(scene.objects.map((object) => [object.id, "placeholder" as const])),
+    );
+    nextObjectIdRef.current = Date.now();
+  };
+
+  const saveSceneLocally = () => {
+    try {
+      window.localStorage.setItem(SAVED_SCENE_STORAGE_KEY, JSON.stringify(buildScenePayload()));
+      setSceneStatus("Saved locally");
+    } catch {
+      setSceneStatus("Scene could not be saved locally");
+    }
+  };
+
+  const loadSavedScene = () => {
+    const saved = parseSavedSceneData(window.localStorage.getItem(SAVED_SCENE_STORAGE_KEY));
+
+    if (!saved) {
+      setSceneStatus("No saved scene found");
+      return;
+    }
+
+    applyScenePayload(saved);
+    setSceneStatus("Loaded saved scene");
+  };
+
+  const resetSavedScene = () => {
+    window.localStorage.removeItem(SAVED_SCENE_STORAGE_KEY);
+    setSceneStatus("Saved scene cleared");
+  };
+
+  const saveSceneToCloud = async () => {
+    if (!cloudConfigured || !isSupabaseConfigured()) {
+      setSceneStatus("Cloud database is not configured. Using local demo storage.");
+      return;
+    }
+
+    setIsSavingSceneToCloud(true);
+
+    try {
+      const client = getSupabaseBrowserClient();
+
+      if (!client) {
+        throw new Error("Cloud database is not configured. Using local demo storage.");
+      }
+
+      const scene = buildScenePayload();
+      const { error } = await client.from("scenes").insert({
+        name: `${scene.name} ${new Date().toLocaleString()}`,
+        room_type: scene.roomType,
+        active_surface: scene.activeSurface,
+        floor_tile_id: scene.floorTileId || null,
+        left_wall_tile_id: scene.leftWallTileId || null,
+        right_wall_tile_id: scene.rightWallTileId || null,
+        back_wall_tile_id: scene.backWallTileId || null,
+        objects: scene.objects,
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      setSceneStatus("Saved scene to cloud");
+    } catch (error) {
+      setSceneStatus(error instanceof Error ? error.message : "Cloud scene save failed");
+    } finally {
+      setIsSavingSceneToCloud(false);
+    }
+  };
+
+  const loadLatestCloudScene = async () => {
+    if (!cloudConfigured || !isSupabaseConfigured()) {
+      setSceneStatus("Cloud database is not configured. Using local demo storage.");
+      return;
+    }
+
+    setIsLoadingCloudScene(true);
+
+    try {
+      const client = getSupabaseBrowserClient();
+
+      if (!client) {
+        throw new Error("Cloud database is not configured. Using local demo storage.");
+      }
+
+      const { data, error } = await client
+        .from("scenes")
+        .select(
+          "id,name,room_type,active_surface,floor_tile_id,left_wall_tile_id,right_wall_tile_id,back_wall_tile_id,objects,created_at,updated_at",
+        )
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) {
+        throw error;
+      }
+
+      if (!data) {
+        setSceneStatus("No saved scene found");
+        return;
+      }
+
+      const parsedScene = parseSavedSceneData(JSON.stringify(mapCloudScene(data)));
+
+      if (!parsedScene) {
+        setSceneStatus("No saved scene found");
+        return;
+      }
+
+      applyScenePayload(parsedScene);
+      setSceneStatus("Loaded saved scene");
+    } catch (error) {
+      setSceneStatus(error instanceof Error ? error.message : "Cloud scene load failed");
+    } finally {
+      setIsLoadingCloudScene(false);
+    }
+  };
 
   const syncRoomObjects = (nextRoomId: RoomTemplateId) => {
     const nextRoom = roomTemplates.find((item) => item.id === nextRoomId) ?? roomTemplates[0];
@@ -858,6 +1100,48 @@ export function VisualizerShell() {
                   </h2>
                   <p className="mt-2 text-sm text-slate-300">
                     Rotate the room, compare tile finishes, and fine-tune the automatically placed room objects.
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={saveSceneLocally}
+                      className="secondary-btn px-4 py-2 text-xs font-semibold"
+                    >
+                      Save Scene
+                    </button>
+                    <button
+                      type="button"
+                      onClick={loadSavedScene}
+                      className="secondary-btn px-4 py-2 text-xs font-semibold"
+                    >
+                      Load Saved Scene
+                    </button>
+                    <button
+                      type="button"
+                      onClick={resetSavedScene}
+                      className="secondary-btn px-4 py-2 text-xs font-semibold"
+                    >
+                      Reset Saved Scene
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void saveSceneToCloud()}
+                      className="secondary-btn px-4 py-2 text-xs font-semibold"
+                      disabled={isSavingSceneToCloud}
+                    >
+                      {isSavingSceneToCloud ? "Saving..." : "Save Scene to Cloud"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void loadLatestCloudScene()}
+                      className="secondary-btn px-4 py-2 text-xs font-semibold"
+                      disabled={isLoadingCloudScene}
+                    >
+                      {isLoadingCloudScene ? "Loading..." : "Load Latest Cloud Scene"}
+                    </button>
+                  </div>
+                  <p className="mt-3 text-sm text-slate-300">
+                    {sceneStatus || cloudError || "No saved scene found"}
                   </p>
                 </div>
                 <button

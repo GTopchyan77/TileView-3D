@@ -1,8 +1,13 @@
 "use client";
 
-import { useMemo, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import seedTiles from "@/data/tiles.json";
 import { CUSTOM_TILES_STORAGE_KEY } from "@/lib/storage";
+import {
+  CLOUD_TILES_UPDATED_EVENT,
+  fetchCloudTiles,
+  isSupabaseConfigured,
+} from "@/lib/supabase/client";
 import { Tile } from "@/types/tile";
 
 const DEFAULT_TILES = seedTiles as Tile[];
@@ -73,15 +78,60 @@ function subscribeToCustomTiles(onStoreChange: () => void) {
 }
 
 export function useTiles() {
+  const [cloudTiles, setCloudTiles] = useState<Tile[]>(EMPTY_CUSTOM_TILES);
+  const [cloudError, setCloudError] = useState<string>("");
+  const cloudConfigured = isSupabaseConfigured();
   const customTiles = useSyncExternalStore(
     subscribeToCustomTiles,
     getCustomTilesSnapshot,
     getServerSnapshot,
   );
 
+  useEffect(() => {
+    if (!cloudConfigured) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadCloudTiles = async () => {
+      try {
+        const nextTiles = await fetchCloudTiles();
+
+        if (!cancelled) {
+          setCloudTiles(nextTiles);
+          setCloudError("");
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setCloudTiles(EMPTY_CUSTOM_TILES);
+          setCloudError(error instanceof Error ? error.message : "Cloud tiles could not be loaded.");
+        }
+      }
+    };
+
+    const handleCloudTilesUpdated = () => {
+      void loadCloudTiles();
+    };
+
+    void loadCloudTiles();
+    window.addEventListener(CLOUD_TILES_UPDATED_EVENT, handleCloudTilesUpdated);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener(CLOUD_TILES_UPDATED_EVENT, handleCloudTilesUpdated);
+    };
+  }, [cloudConfigured]);
+
   const tiles = useMemo(() => {
-    return customTiles.length ? [...DEFAULT_TILES, ...customTiles] : DEFAULT_TILES;
-  }, [customTiles]);
+    const merged = new Map<string, Tile>();
+
+    DEFAULT_TILES.forEach((tile) => merged.set(tile.id, tile));
+    customTiles.forEach((tile) => merged.set(tile.id, tile));
+    cloudTiles.forEach((tile) => merged.set(tile.id, tile));
+
+    return Array.from(merged.values());
+  }, [cloudTiles, customTiles]);
 
   const addTile = (tile: Tile) => {
     const next = [...customTiles, tile];
@@ -104,6 +154,9 @@ export function useTiles() {
     tiles,
     defaultTiles: DEFAULT_TILES,
     customTiles,
+    cloudTiles,
+    cloudConfigured,
+    cloudError,
     addTile,
     deleteCustomTile,
     resetCustomTiles,

@@ -1,5 +1,6 @@
 export type SurfaceTarget = "floor" | "wall";
 export type WallSurfaceId = "back" | "left" | "right";
+export type SceneSurfaceSelection = "floor" | "left-wall" | "right-wall" | "back-wall" | "all-walls";
 export type DemoObjectType =
   | "sink"
   | "toilet"
@@ -64,4 +65,26 @@ export type PlacedDemoObject = {
   rotationDeg: number;
   scale: number;
   modelYOffset?: number;
+};
+
+export type SavedSceneObject = {
+  id: string;
+  type: DemoObjectType;
+  x: number;
+  y: number;
+  z: number;
+  rotationDeg: number;
+  scale: number;
+  modelYOffset?: number;
+};
+
+export type SavedSceneData = {
+  name: string;
+  roomType: RoomTemplateId;
+  activeSurface: SceneSurfaceSelection;
+  floorTileId: string;
+  leftWallTileId: string;
+  rightWallTileId: string;
+  backWallTileId: string;
+  objects: SavedSceneObject[];
 };
