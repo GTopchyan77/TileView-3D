@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { SiteNav } from "@/components/site-nav";
 import { useTiles } from "@/hooks/use-tiles";
@@ -349,6 +349,20 @@ export function VisualizerShell() {
     right: rightWallTile,
     back: backWallTile,
   };
+
+  useEffect(() => {
+    if (process.env.NODE_ENV !== "development") {
+      return;
+    }
+
+    console.info("TileView selected surface tiles", {
+      floor: { name: floorTile?.name, image: floorTile?.image },
+      leftWall: { name: leftWallTile?.name, image: leftWallTile?.image },
+      rightWall: { name: rightWallTile?.name, image: rightWallTile?.image },
+      backWall: { name: backWallTile?.name, image: backWallTile?.image },
+    });
+  }, [backWallTile, floorTile, leftWallTile, rightWallTile]);
+
   const selectedTileId = useMemo(() => {
     if (surfaceTarget === "floor") {
       return floorTileId;

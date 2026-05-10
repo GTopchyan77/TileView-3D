@@ -6,7 +6,10 @@ import { Component, Suspense, useEffect, useMemo, useRef, useState } from "react
 import type { ReactNode, RefObject } from "react";
 import {
   Box3,
+  CanvasTexture,
   DoubleSide,
+  LinearMipmapLinearFilter,
+  LinearFilter,
   Object3D,
   RepeatWrapping,
   SRGBColorSpace,
@@ -53,6 +56,7 @@ type ViewerProps = {
 };
 
 type SurfaceMeshProps = {
+  surfaceName: string;
   tile?: Tile;
   fallbackColor: string;
   size: [number, number];
@@ -227,24 +231,69 @@ function useResolvedTextureUrl(tile: Tile | undefined) {
   return imageUrl ? resolvedUrl : null;
 }
 
-function useTiledMaterial(tile: Tile | undefined, fallbackColor: string, size: [number, number]) {
+function makeRepeatableCanvasTexture(sourceImage: CanvasImageSource) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 512;
+  canvas.height = 512;
+  const context = canvas.getContext("2d");
+
+  if (!context) {
+    return null;
+  }
+
+  context.drawImage(sourceImage, 0, 0, canvas.width, canvas.height);
+
+  const texture = new CanvasTexture(canvas);
+  texture.colorSpace = SRGBColorSpace;
+  texture.wrapS = RepeatWrapping;
+  texture.wrapT = RepeatWrapping;
+  texture.minFilter = LinearMipmapLinearFilter;
+  texture.magFilter = LinearFilter;
+  texture.generateMipmaps = true;
+  return texture;
+}
+
+function useTiledMaterial(
+  surfaceName: string,
+  tile: Tile | undefined,
+  fallbackColor: string,
+  size: [number, number],
+) {
   const resolvedUrl = useResolvedTextureUrl(tile);
   const textureUrl = resolvedUrl ?? "/tiles/placeholder.svg";
-  const texture = useLoader(TextureLoader, textureUrl);
+  const sourceTexture = useLoader(TextureLoader, textureUrl);
 
   const configuredTexture = useMemo(() => {
-    if (!tile || !resolvedUrl || !texture) {
+    if (!tile || !resolvedUrl || !sourceTexture.image) {
       return null;
     }
 
-    const nextTexture = texture.clone();
-    nextTexture.colorSpace = SRGBColorSpace;
-    nextTexture.wrapS = RepeatWrapping;
-    nextTexture.wrapT = RepeatWrapping;
+    const nextTexture = makeRepeatableCanvasTexture(sourceTexture.image);
+
+    if (!nextTexture) {
+      return null;
+    }
+
     nextTexture.repeat.set((size[0] * 100) / tile.widthCm, (size[1] * 100) / tile.heightCm);
     nextTexture.needsUpdate = true;
+
+    if (process.env.NODE_ENV === "development") {
+      console.info("TileView texture binding", {
+        surface: surfaceName,
+        tile: tile.name,
+        image: tile.image,
+        resolvedUrl,
+        textureExists: Boolean(nextTexture),
+        repeat: {
+          x: nextTexture.repeat.x,
+          y: nextTexture.repeat.y,
+        },
+        fallbackUsed: resolvedUrl === "/tiles/placeholder.svg",
+      });
+    }
+
     return nextTexture;
-  }, [resolvedUrl, size, texture, tile]);
+  }, [resolvedUrl, size, sourceTexture.image, surfaceName, tile]);
 
   useEffect(() => {
     return () => {
@@ -253,9 +302,10 @@ function useTiledMaterial(tile: Tile | undefined, fallbackColor: string, size: [
   }, [configuredTexture]);
 
   return {
-    color: tile ? undefined : fallbackColor,
+    color: configuredTexture ? "#ffffff" : fallbackColor,
     map: configuredTexture ?? undefined,
     resolvedUrl,
+    textureExists: Boolean(configuredTexture),
   };
 }
 
@@ -347,19 +397,34 @@ function useProjectionTexture(textureUrl: string) {
 }
 
 function SurfaceMesh({
+  surfaceName,
   tile,
   fallbackColor,
   size,
   rotation = [0, 0, 0],
   position,
 }: SurfaceMeshProps) {
-  const { resolvedUrl, ...materialProps } = useTiledMaterial(tile, fallbackColor, size);
+  const { resolvedUrl, textureExists, ...materialProps } = useTiledMaterial(
+    surfaceName,
+    tile,
+    fallbackColor,
+    size,
+  );
   const surfaceKey = `${tile?.id ?? "fallback"}-${resolvedUrl ?? "color"}-${size.join("x")}-${position.join("x")}`;
 
   return (
     <mesh key={surfaceKey} rotation={rotation} position={position} receiveShadow>
       <planeGeometry args={size} />
-      <meshStandardMaterial key={surfaceKey} {...materialProps} />
+      <meshStandardMaterial
+        key={surfaceKey}
+        map={materialProps.map}
+        color={textureExists ? "#ffffff" : fallbackColor}
+        roughness={0.75}
+        metalness={0}
+        transparent={false}
+        opacity={1}
+        side={DoubleSide}
+      />
     </mesh>
   );
 }
@@ -1089,6 +1154,7 @@ function PhotoProjectionRoom({
     <>
       {backWallTile ? (
         <SurfaceMesh
+          surfaceName="back wall"
           tile={backWallTile}
           fallbackColor={room.wallColor}
           size={[backWallWidth, wallHeight]}
@@ -1106,6 +1172,7 @@ function PhotoProjectionRoom({
 
       {leftWallTile ? (
         <SurfaceMesh
+          surfaceName="left wall"
           tile={leftWallTile}
           fallbackColor={room.wallColor}
           size={[sideWallWidth, wallHeight]}
@@ -1125,6 +1192,7 @@ function PhotoProjectionRoom({
 
       {rightWallTile ? (
         <SurfaceMesh
+          surfaceName="right wall"
           tile={rightWallTile}
           fallbackColor={room.wallColor}
           size={[sideWallWidth, wallHeight]}
@@ -1144,6 +1212,7 @@ function PhotoProjectionRoom({
 
       {floorTile ? (
         <SurfaceMesh
+          surfaceName="floor"
           tile={floorTile}
           fallbackColor={room.floorColor}
           size={[room.widthM, room.depthM]}
@@ -1222,6 +1291,7 @@ function RoomScene({
       ) : (
         <>
           <SurfaceMesh
+            surfaceName="floor"
             tile={floorTile}
             fallbackColor={room.floorColor}
             size={[room.widthM, room.depthM]}
@@ -1229,12 +1299,14 @@ function RoomScene({
             position={[0, 0, 0]}
           />
           <SurfaceMesh
+            surfaceName="back wall"
             tile={backWallTile}
             fallbackColor={room.wallColor}
             size={[backWallWidth, wallHeight]}
             position={[0, wallHeight / 2, -room.depthM / 2]}
           />
           <SurfaceMesh
+            surfaceName="left wall"
             tile={leftWallTile}
             fallbackColor={room.wallColor}
             size={[leftWallWidth, wallHeight]}
@@ -1242,6 +1314,7 @@ function RoomScene({
             position={[-room.widthM / 2, wallHeight / 2, 0]}
           />
           <SurfaceMesh
+            surfaceName="right wall"
             tile={rightWallTile}
             fallbackColor={room.wallColor}
             size={[leftWallWidth, wallHeight]}
