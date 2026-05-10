@@ -972,70 +972,29 @@ export function VisualizerShell() {
       </div>
 
       <main className="mx-auto flex min-h-screen w-full max-w-[1600px] flex-col gap-4 px-4 py-4 md:px-6 md:py-5">
-        <section className="panel fade-in-up overflow-hidden rounded-[32px] p-5 md:p-6">
-          <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
+        <section className="fade-in-up py-2">
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
             <div className="max-w-3xl">
-              <p className="section-kicker">3D Showroom Demo</p>
-              <h1 className="display-title mt-3 text-3xl font-semibold text-white md:text-5xl">
+              <h1 className="display-title text-3xl font-semibold text-white md:text-5xl">
                 3D Tile Room Visualizer
               </h1>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-200 md:text-base">
-                Preview floor and wall tiles in staged 3D room types with automatic object placement before buying.
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-200 md:text-base">
+                Preview floor and wall tiles in staged 3D rooms.
+              </p>
+              <p className="mt-2 inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-sky-100">
+                {room.label}
               </p>
             </div>
 
             <div className="flex flex-wrap gap-3 xl:justify-end">
-                <button type="button" onClick={requestQuote} className="primary-btn px-5 py-3 text-sm">
-                  Request Quote
-                </button>
-                <button type="button" onClick={exportScreenshot} className="secondary-btn px-5 py-3 text-sm">
-                  Export Preview Image
-                </button>
+              <button type="button" onClick={exportScreenshot} className="secondary-btn px-5 py-3 text-sm">
+                Export Preview Image
+              </button>
+              <button type="button" onClick={requestQuote} className="primary-btn px-5 py-3 text-sm">
+                Request Quote
+              </button>
             </div>
           </div>
-
-            <div className="mt-5 grid gap-3 sm:grid-cols-3">
-              <div className="panel panel-hover rounded-[24px] bg-slate-950/60 p-4 text-white">
-                <p className="text-xs uppercase tracking-[0.2em] text-sky-200">Demo catalog</p>
-                <p className="mt-2 text-2xl font-semibold">{tiles.length}</p>
-                <p className="mt-1 text-xs text-slate-300">Local tile options ready for comparison.</p>
-              </div>
-              <div className="panel panel-hover rounded-[24px] p-4">
-                <p className="text-xs uppercase tracking-[0.2em] text-sky-200">Room template</p>
-                <p className="mt-2 text-lg font-semibold text-slate-50">{room.label}</p>
-                <p className="mt-1 text-xs text-slate-300">
-                  {room.widthM}m x {room.depthM}m x {room.heightM}m
-                </p>
-              </div>
-              <div className="panel panel-hover rounded-[24px] p-4">
-                <p className="text-xs uppercase tracking-[0.2em] text-sky-200">Active surface</p>
-                <p className="mt-2 text-lg font-semibold capitalize text-slate-50">{targetLabel}</p>
-                <p className="mt-1 text-xs text-slate-300">Choose exact surfaces before selecting a tile.</p>
-              </div>
-            </div>
-        </section>
-
-        <section className="fade-in-up-delayed grid gap-3 md:grid-cols-3">
-          {[
-            {
-              title: "Choose a room",
-              body: "Start with Bathroom, Kitchen, Living Room, Bedroom, or Empty Room to load a relevant staged scene.",
-            },
-            {
-              title: "Pick a tile",
-              body: "Choose Floor, Left Wall, Right Wall, Back Wall, or All Walls before tapping a tile card.",
-            },
-            {
-              title: "Place objects and export",
-              body: "Adjust object placement, orbit the scene, compare finishes, and export a preview image.",
-            },
-          ].map((step, index) => (
-            <div key={step.title} className="panel panel-hover rounded-[24px] p-4">
-              <p className="section-kicker">Step {index + 1}</p>
-              <p className="mt-2 text-lg font-semibold text-slate-50">{step.title}</p>
-              <p className="mt-1 text-sm leading-6 text-slate-300">{step.body}</p>
-            </div>
-          ))}
         </section>
 
         <section
