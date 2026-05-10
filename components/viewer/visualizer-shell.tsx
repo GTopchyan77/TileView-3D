@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { SiteNav } from "@/components/site-nav";
 import { useTiles } from "@/hooks/use-tiles";
+import { translateRoomLabel, useLanguage } from "@/lib/i18n";
 import { roomTemplates } from "@/lib/room-templates";
 import { SAVED_SCENE_STORAGE_KEY } from "@/lib/storage";
 import { getSupabaseBrowserClient, isSupabaseConfigured, mapCloudScene } from "@/lib/supabase/client";
@@ -307,6 +308,7 @@ function AccordionSection({
 
 export function VisualizerShell() {
   const { tiles, cloudConfigured, cloudError } = useTiles();
+  const { t } = useLanguage();
   const [roomId, setRoomId] = useState<RoomTemplateId>("bathroom");
   const [surfaceTarget, setSurfaceTarget] = useState<SurfaceSelection>("floor");
   const [floorTileId, setFloorTileId] = useState<string>("travertine-sand");
@@ -385,23 +387,23 @@ export function VisualizerShell() {
   }, [floorTileId, surfaceTarget, wallTileIds]);
   const targetLabel = useMemo(() => {
     if (surfaceTarget === "floor") {
-      return "floor";
+      return t("floor");
     }
 
     if (surfaceTarget === "left-wall") {
-      return "left wall";
+      return t("leftWall");
     }
 
     if (surfaceTarget === "right-wall") {
-      return "right wall";
+      return t("rightWall");
     }
 
     if (surfaceTarget === "back-wall") {
-      return "back wall";
+      return t("backWall");
     }
 
-    return "all walls";
-  }, [surfaceTarget]);
+    return t("allWalls");
+  }, [surfaceTarget, t]);
   const selectedObject = placedObjects.find((object) => object.id === selectedObjectId) ?? null;
 
   const buildScenePayload = (): SavedSceneData => ({
@@ -690,7 +692,7 @@ export function VisualizerShell() {
               : "border-white/10 bg-white/4 text-slate-200 hover:bg-white/8"
           }`}
         >
-          <p className="font-semibold text-current">{template.label}</p>
+          <p className="font-semibold text-current">{translateRoomLabel(template.id, t)}</p>
           <p className="mt-1 text-sm text-slate-300">{template.description}</p>
         </button>
       ))}
@@ -702,27 +704,27 @@ export function VisualizerShell() {
       {[
         {
           id: "floor" as SurfaceSelection,
-          label: "Floor",
+          label: t("floor"),
           copy: "Apply the active tile only to the floor.",
         },
         {
           id: "left-wall" as SurfaceSelection,
-          label: "Left Wall",
+          label: t("leftWall"),
           copy: "Apply the active tile only to the left wall.",
         },
         {
           id: "right-wall" as SurfaceSelection,
-          label: "Right Wall",
+          label: t("rightWall"),
           copy: "Apply the active tile only to the right wall.",
         },
         {
           id: "back-wall" as SurfaceSelection,
-          label: "Back Wall",
+          label: t("backWall"),
           copy: "Apply the active tile only to the back wall.",
         },
         {
           id: "all-walls" as SurfaceSelection,
-          label: "All Walls",
+          label: t("allWalls"),
           copy: "Apply the active tile across every wall surface.",
         },
       ].map((surface) => {
@@ -753,7 +755,7 @@ export function VisualizerShell() {
   const sceneObjectsContent = (
     <div className="rounded-[24px] border border-white/10 bg-white/5 p-4">
       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">
-        Scene objects
+        {t("addObjects")}
       </p>
       {placedObjects.length ? (
         <div className="mt-3 grid gap-2">
@@ -774,37 +776,13 @@ export function VisualizerShell() {
                 <p className="font-semibold">
                   {index + 1}. {getObjectLabel(object.type)}
                 </p>
-                <div className="mt-2">
-                  <span
-                    className={`rounded-full px-2.5 py-1 text-[0.62rem] font-semibold uppercase tracking-[0.14em] ${
-                      objectRenderStates[object.id] === "gltf"
-                        ? "border border-emerald-400/30 bg-emerald-500/12 text-emerald-200"
-                        : "border border-amber-400/30 bg-amber-500/12 text-amber-200"
-                    }`}
-                  >
-                    {objectRenderStates[object.id] === "gltf" ? "Real model" : "Placeholder"}
-                  </span>
-                </div>
-                <p className="mt-1 text-xs text-slate-300">
-                  X {object.x.toFixed(2)} m / Z {object.z.toFixed(2)} m
-                </p>
-                {objectRenderStates[object.id] === "placeholder" && object.type !== "table" ? (
-                  <p className="mt-2 text-xs font-medium text-amber-300">
-                    Model missing or failed to load
-                  </p>
-                ) : null}
-                {object.type === "table" && objectRenderStates[object.id] === "placeholder" ? (
-                  <p className="mt-2 text-xs font-medium text-rose-300">
-                    Failed to load table.glb
-                  </p>
-                ) : null}
               </button>
             );
           })}
         </div>
       ) : (
         <p className="mt-3 text-sm text-slate-300">
-          Empty Room starts without objects. Add any object manually if needed.
+          {t("emptyRoom")} starts without objects. Add any object manually if needed.
         </p>
       )}
     </div>
@@ -813,33 +791,11 @@ export function VisualizerShell() {
   const selectedObjectControls = selectedObject ? (
     <div className="rounded-[22px] border border-white/10 bg-white/5 p-3.5 md:sticky md:top-20">
       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">
-        Selected object
+        {t("selectedObject")}
       </p>
       <p className="mt-1.5 text-base font-semibold text-slate-50">
         {getObjectLabel(selectedObject.type)}
       </p>
-      <div className="mt-2.5">
-        <span
-          className={`rounded-full px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em] ${
-            objectRenderStates[selectedObject.id] === "gltf"
-              ? "border border-emerald-400/30 bg-emerald-500/12 text-emerald-200"
-              : "border border-amber-400/30 bg-amber-500/12 text-amber-200"
-          }`}
-        >
-          {objectRenderStates[selectedObject.id] === "gltf" ? "Real model" : "Placeholder"}
-        </span>
-      </div>
-      {selectedObject.type === "table" && objectRenderStates[selectedObject.id] === "placeholder" ? (
-        <p className="mt-2.5 text-sm font-medium text-rose-300">
-          Failed to load table.glb
-        </p>
-      ) : null}
-      {objectRenderStates[selectedObject.id] === "placeholder" && selectedObject.type !== "table" ? (
-        <p className="mt-2.5 text-sm font-medium text-amber-300">
-          Model missing or failed to load.
-        </p>
-      ) : null}
-
       <div className="mt-3 grid grid-cols-3 gap-2">
         <button
           type="button"
@@ -960,7 +916,7 @@ export function VisualizerShell() {
   const addObjectButtons = (
     <div className="rounded-[22px] border border-white/10 bg-white/5 p-3.5">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">Add objects</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">{t("addObjects")}</p>
         <span className="text-xs text-slate-400">Manual placement</span>
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2.5">
@@ -979,6 +935,54 @@ export function VisualizerShell() {
     </div>
   );
 
+  const advancedSceneControls = (
+    <details className="panel rounded-[24px] p-4">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 text-left [&::-webkit-details-marker]:hidden">
+        <div>
+          <p className="text-base font-semibold text-slate-50">{t("advanced")}</p>
+          <p className="mt-1 text-sm text-slate-300">
+            Optional scene save/load tools for demo setup.
+          </p>
+        </div>
+        <span className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-200">Open</span>
+      </summary>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        <button type="button" onClick={saveSceneLocally} className="secondary-btn px-4 py-2.5 text-sm">
+          {t("saveScene")}
+        </button>
+        <button type="button" onClick={loadSavedScene} className="secondary-btn px-4 py-2.5 text-sm">
+          {t("loadSavedScene")}
+        </button>
+        <button type="button" onClick={resetSavedScene} className="secondary-btn px-4 py-2.5 text-sm">
+          {t("resetSavedScene")}
+        </button>
+        <button
+          type="button"
+          onClick={saveSceneToCloud}
+          disabled={isSavingSceneToCloud || !cloudConfigured}
+          className="secondary-btn px-4 py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-55"
+        >
+          {isSavingSceneToCloud ? "Saving..." : "Save Scene to Cloud"}
+        </button>
+        <button
+          type="button"
+          onClick={loadLatestCloudScene}
+          disabled={isLoadingCloudScene || !cloudConfigured}
+          className="secondary-btn px-4 py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-55"
+        >
+          {isLoadingCloudScene ? "Loading..." : "Load Latest Cloud Scene"}
+        </button>
+      </div>
+
+      <p className="mt-3 text-sm text-slate-300">
+        {sceneStatus ||
+          cloudError ||
+          (!cloudConfigured ? "Cloud database is not configured. Using local demo storage." : "")}
+      </p>
+    </details>
+  );
+
   return (
     <div className="pb-8">
       <div className="px-4 pt-4 md:px-6">
@@ -990,22 +994,22 @@ export function VisualizerShell() {
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
             <div className="max-w-3xl">
               <h1 className="display-title text-3xl font-semibold text-white md:text-5xl">
-                3D Tile Room Visualizer
+                {t("title")}
               </h1>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-200 md:text-base">
-                Preview floor and wall tiles in staged 3D rooms.
+                {t("subtitle")}
               </p>
               <p className="mt-2 inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-sky-100">
-                {room.label}
+                {translateRoomLabel(room.id, t)}
               </p>
             </div>
 
             <div className="flex flex-wrap gap-3 xl:justify-end">
               <button type="button" onClick={exportScreenshot} className="secondary-btn px-5 py-3 text-sm">
-                Export Preview Image
+                {t("exportPreviewImage")}
               </button>
               <button type="button" onClick={requestQuote} className="primary-btn px-5 py-3 text-sm">
-                Request Quote
+                {t("requestQuote")}
               </button>
             </div>
           </div>
@@ -1017,14 +1021,12 @@ export function VisualizerShell() {
         >
           <aside className="hidden md:flex md:flex-col md:gap-6">
             <div className="panel rounded-[28px] p-5">
-              <p className="section-kicker">Room template</p>
-              <p className="mt-3 text-xl font-semibold text-slate-50">Choose the customer room scene</p>
+              <p className="section-kicker">{t("chooseRoom")}</p>
               <div className="mt-5">{roomSelectorContent}</div>
             </div>
 
             <div className="panel rounded-[28px] p-5">
-              <p className="section-kicker">Surface actions</p>
-              <p className="mt-3 text-xl font-semibold text-slate-50">Choose the exact tile target surface</p>
+              <p className="section-kicker">{t("chooseSurface")}</p>
               <div className="mt-5">{surfaceSelectorContent}</div>
             </div>
 
@@ -1032,28 +1034,28 @@ export function VisualizerShell() {
               <p className="section-kicker">Selection summary</p>
               <div className="mt-4 grid gap-3">
                 <div className="glass-chip rounded-[22px] p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">Floor</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">{t("floor")}</p>
                   <p className="mt-2 text-sm font-semibold text-slate-50">{floorTile?.name ?? "None"}</p>
                   <p className="mt-1 text-sm text-slate-300">
                     {floorTile ? `${floorTile.widthCm}x${floorTile.heightCm} cm` : "No tile applied yet"}
                   </p>
                 </div>
                 <div className="glass-chip rounded-[22px] p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">Left wall</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">{t("leftWall")}</p>
                   <p className="mt-2 text-sm font-semibold text-slate-50">{leftWallTile?.name ?? "None"}</p>
                   <p className="mt-1 text-sm text-slate-300">
                     {leftWallTile ? `${leftWallTile.widthCm}x${leftWallTile.heightCm} cm` : "No tile applied yet"}
                   </p>
                 </div>
                 <div className="glass-chip rounded-[22px] p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">Right wall</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">{t("rightWall")}</p>
                   <p className="mt-2 text-sm font-semibold text-slate-50">{rightWallTile?.name ?? "None"}</p>
                   <p className="mt-1 text-sm text-slate-300">
                     {rightWallTile ? `${rightWallTile.widthCm}x${rightWallTile.heightCm} cm` : "No tile applied yet"}
                   </p>
                 </div>
                 <div className="glass-chip rounded-[22px] p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">Back wall</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">{t("backWall")}</p>
                   <p className="mt-2 text-sm font-semibold text-slate-50">{backWallTile?.name ?? "None"}</p>
                   <p className="mt-1 text-sm text-slate-300">
                     {backWallTile ? `${backWallTile.widthCm}x${backWallTile.heightCm} cm` : "No tile applied yet"}
@@ -1069,52 +1071,10 @@ export function VisualizerShell() {
                 <div>
                   <p className="section-kicker">3D preview</p>
                   <h2 className="mt-2 text-2xl font-semibold text-slate-50">
-                    Live room preview for the {room.label}
+                    Live room preview for the {translateRoomLabel(room.id, t)}
                   </h2>
                   <p className="mt-2 text-sm text-slate-300">
                     Rotate the room, compare tile finishes, and fine-tune the automatically placed room objects.
-                  </p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={saveSceneLocally}
-                      className="secondary-btn px-4 py-2 text-xs font-semibold"
-                    >
-                      Save Scene
-                    </button>
-                    <button
-                      type="button"
-                      onClick={loadSavedScene}
-                      className="secondary-btn px-4 py-2 text-xs font-semibold"
-                    >
-                      Load Saved Scene
-                    </button>
-                    <button
-                      type="button"
-                      onClick={resetSavedScene}
-                      className="secondary-btn px-4 py-2 text-xs font-semibold"
-                    >
-                      Reset Saved Scene
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void saveSceneToCloud()}
-                      className="secondary-btn px-4 py-2 text-xs font-semibold"
-                      disabled={isSavingSceneToCloud}
-                    >
-                      {isSavingSceneToCloud ? "Saving..." : "Save Scene to Cloud"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void loadLatestCloudScene()}
-                      className="secondary-btn px-4 py-2 text-xs font-semibold"
-                      disabled={isLoadingCloudScene}
-                    >
-                      {isLoadingCloudScene ? "Loading..." : "Load Latest Cloud Scene"}
-                    </button>
-                  </div>
-                  <p className="mt-3 text-sm text-slate-300">
-                    {sceneStatus || cloudError || "No saved scene found"}
                   </p>
                 </div>
                 <button
@@ -1122,7 +1082,7 @@ export function VisualizerShell() {
                   onClick={exportScreenshot}
                   className="secondary-btn px-5 py-3 text-sm"
                 >
-                  Export Preview Image
+                  {t("exportPreviewImage")}
                 </button>
               </div>
             </div>
@@ -1154,15 +1114,15 @@ export function VisualizerShell() {
 
                 <div className="grid gap-3 md:hidden">
                   <AccordionSection
-                    title="Room selector"
-                    subtitle={`${room.label} · ${room.widthM}m x ${room.depthM}m x ${room.heightM}m`}
+                    title={t("chooseRoom")}
+                    subtitle={`${translateRoomLabel(room.id, t)} · ${room.widthM}m x ${room.depthM}m x ${room.heightM}m`}
                     defaultOpen
                   >
                     {roomSelectorContent}
                   </AccordionSection>
 
                   <AccordionSection
-                    title="Surface selector"
+                    title={t("chooseSurface")}
                     subtitle={`Active target: ${targetLabel}`}
                     defaultOpen
                   >
@@ -1170,7 +1130,7 @@ export function VisualizerShell() {
                   </AccordionSection>
 
                   <AccordionSection
-                    title="Tile catalog"
+                    title={t("tileCatalog")}
                     subtitle={`${tiles.length} demo tiles`}
                     defaultOpen
                   >
@@ -1189,7 +1149,7 @@ export function VisualizerShell() {
                   </AccordionSection>
 
                   <AccordionSection
-                    title="Objects"
+                    title={t("addObjects")}
                     subtitle={`${placedObjects.length} staged objects`}
                   >
                     <div className="space-y-4">
@@ -1200,38 +1160,31 @@ export function VisualizerShell() {
                   </AccordionSection>
                 </div>
 
-                <div className="hidden gap-4 md:grid md:grid-cols-3">
+                <div className="hidden gap-4 md:grid md:grid-cols-2">
                   <div className="panel panel-hover rounded-[26px] p-5">
-                    <p className="section-kicker">Floor tile</p>
+                    <p className="section-kicker">{t("floor")}</p>
                     <p className="mt-3 text-xl font-semibold text-slate-50">{floorTile?.name ?? "None selected"}</p>
                     <p className="mt-2 text-sm text-slate-300">
                       {floorTile?.finish ?? "Choose from the catalog below."}
                     </p>
                   </div>
                   <div className="panel panel-hover rounded-[26px] p-5">
-                    <p className="section-kicker">Wall tile</p>
+                    <p className="section-kicker">{t("chooseSurface")}</p>
                     <p className="mt-3 text-xl font-semibold text-slate-50">{targetLabel}</p>
                     <p className="mt-2 text-sm text-slate-300">
                       Active wall target updates independently, or all walls together.
                     </p>
                   </div>
-                  <div className="panel panel-hover rounded-[26px] p-5">
-                    <p className="section-kicker">Model status</p>
-                    <p className="mt-3 text-xl font-semibold text-slate-50">
-                      {placedObjects.filter((object) => objectRenderStates[object.id] === "gltf").length} real models
-                    </p>
-                    <p className="mt-2 text-sm text-slate-300">
-                      Missing assets fall back to shaped placeholders, while valid GLBs show a visible Real model badge.
-                    </p>
-                  </div>
                 </div>
+
+                {advancedSceneControls}
 
                 <section className="hidden rounded-[34px] p-5 md:block md:p-6">
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                     <div>
-                      <p className="section-kicker">Demo catalog</p>
+                      <p className="section-kicker">{t("tileCatalog")}</p>
                       <h2 className="mt-2 text-2xl font-semibold text-slate-50">
-                        Browse tiles for the active surface
+                        {t("tileCatalog")}
                       </h2>
                       <p className="mt-2 text-sm text-slate-300">
                         The currently active target is <span className="font-semibold capitalize text-slate-100">{targetLabel}</span>.
@@ -1258,9 +1211,9 @@ export function VisualizerShell() {
               </div>
 
               <aside className="panel hidden min-w-[320px] self-start rounded-[26px] p-4 md:block">
-                <p className="section-kicker">Objects</p>
+                <p className="section-kicker">{t("addObjects")}</p>
                 <h3 className="mt-2 text-xl font-semibold text-slate-50">
-                  Automatic room objects
+                  {t("automaticRoomObjects")}
                 </h3>
                 <p className="mt-2 text-sm leading-6 text-slate-300">
                   Room type selection auto-loads relevant objects. You can still add, move, rotate, scale, delete, or reset them manually.

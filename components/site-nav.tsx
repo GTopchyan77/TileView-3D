@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { languages, useLanguage } from "@/lib/i18n";
 
 const navItems = [
   { href: "/", label: "3D Visualizer" },
@@ -11,6 +12,7 @@ const navItems = [
 
 export function SiteNav() {
   const pathname = usePathname();
+  const { language, setLanguage, t } = useLanguage();
 
   return (
     <header className="sticky top-4 z-30">
@@ -22,27 +24,46 @@ export function SiteNav() {
           <p className="text-[0.7rem] font-semibold uppercase tracking-[0.28em] text-slate-300">
             Tile Demo
           </p>
-          <p className="text-sm font-semibold text-slate-50 md:text-base">3D Tile Room Visualizer</p>
+          <p className="text-sm font-semibold text-slate-50 md:text-base">{t("title")}</p>
         </div>
 
-        <div className="glass-chip flex items-center gap-2 rounded-full p-1">
-          {navItems.map((item) => {
-            const isActive = pathname === item.href;
-
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`rounded-full px-4 py-2 text-sm font-medium transition ${
-                  isActive
-                    ? "bg-gradient-to-r from-blue-600 to-sky-400 text-white shadow-[0_10px_30px_rgba(37,99,235,0.28)]"
-                    : "text-slate-200 hover:bg-white/8 hover:text-white"
+        <div className="flex items-center gap-2">
+          <div className="glass-chip flex items-center gap-1 rounded-full p-1">
+            {languages.map((item) => (
+              <button
+                key={item.code}
+                type="button"
+                onClick={() => setLanguage(item.code)}
+                className={`rounded-full px-2.5 py-1.5 text-xs font-semibold transition ${
+                  language === item.code
+                    ? "bg-sky-400 text-slate-950"
+                    : "text-slate-300 hover:bg-white/8 hover:text-white"
                 }`}
               >
                 {item.label}
-              </Link>
-            );
-          })}
+              </button>
+            ))}
+          </div>
+
+          <div className="glass-chip flex items-center gap-2 rounded-full p-1">
+            {navItems.map((item) => {
+              const isActive = pathname === item.href;
+
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+                    isActive
+                      ? "bg-gradient-to-r from-blue-600 to-sky-400 text-white shadow-[0_10px_30px_rgba(37,99,235,0.28)]"
+                      : "text-slate-200 hover:bg-white/8 hover:text-white"
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
+          </div>
         </div>
       </nav>
     </header>
