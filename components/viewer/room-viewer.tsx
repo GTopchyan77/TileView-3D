@@ -71,6 +71,9 @@ type CameraRigProps = {
   cameraPosition: [number, number, number];
   motionTrigger?: number;
   command?: { type: CameraActionType; tick: number } | null;
+  walkModeEnabled?: boolean;
+  keyboardActive?: boolean;
+  onWalkModeExit?: () => void;
 };
 
 type ProjectionSurfaceUrls = {
@@ -91,6 +94,13 @@ type ProjectionPlaneProps = {
 
 const DEFAULT_CAMERA_POSITION = new Vector3(4, 3, 5);
 const DEFAULT_CAMERA_TARGET = new Vector3(0, 0.8, 0);
+const WALK_BASE_SPEED = 1.8;
+const WALK_SPRINT_MULTIPLIER = 2.5;
+const WALK_ACCELERATION = 10;
+const WALK_DAMPING = 8;
+const WALK_MAX_HORIZONTAL_DISTANCE = 32;
+const WALK_MIN_HEIGHT = 0.25;
+const WALK_MAX_HEIGHT = 10;
 const OBJECT_MODEL_PATHS: Record<DemoObjectType, string> = {
   sink: "/models/sink.glb",
   toilet: "/models/toilet.glb",
@@ -1025,13 +1035,23 @@ function GroundShadow({ room }: { room: RoomTemplate }) {
   );
 }
 
-function CameraRig({ controlsRef, cameraPosition, motionTrigger = 0, command }: CameraRigProps) {
+function CameraRig({
+  controlsRef,
+  cameraPosition,
+  motionTrigger = 0,
+  command,
+  walkModeEnabled = false,
+  keyboardActive = false,
+  onWalkModeExit,
+}: CameraRigProps) {
   const { camera } = useThree();
   const baseCameraPosition = useMemo(() => new Vector3(...cameraPosition), [cameraPosition]);
   const desiredPosition = useRef(baseCameraPosition.clone());
   const desiredTarget = useRef(DEFAULT_CAMERA_TARGET.clone());
   const animateRef = useRef(false);
   const motionTimeoutRef = useRef<number | null>(null);
+  const pressedKeysRef = useRef<Set<string>>(new Set());
+  const velocityRef = useRef(new Vector3());
 
   useEffect(() => {
     camera.position.copy(baseCameraPosition);
@@ -1097,7 +1117,129 @@ function CameraRig({ controlsRef, cameraPosition, motionTrigger = 0, command }: 
     animateRef.current = true;
   }, [baseCameraPosition, camera, command, controlsRef]);
 
-  useFrame(() => {
+  useEffect(() => {
+    if (!walkModeEnabled || !keyboardActive) {
+      pressedKeysRef.current.clear();
+      return;
+    }
+
+    const pressedKeys = pressedKeysRef.current;
+    const movementKeys = new Set(["w", "a", "s", "d", "q", "e", "shift", "escape"]);
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const key = event.key.toLowerCase();
+
+      if (!movementKeys.has(key)) {
+        return;
+      }
+
+      event.preventDefault();
+
+      if (key === "escape") {
+        pressedKeys.clear();
+        velocityRef.current.set(0, 0, 0);
+        onWalkModeExit?.();
+        return;
+      }
+
+      pressedKeys.add(key);
+    };
+
+    const handleKeyUp = (event: KeyboardEvent) => {
+      const key = event.key.toLowerCase();
+
+      if (!movementKeys.has(key)) {
+        return;
+      }
+
+      event.preventDefault();
+      pressedKeys.delete(key);
+    };
+
+    window.addEventListener("keydown", handleKeyDown, { passive: false });
+    window.addEventListener("keyup", handleKeyUp, { passive: false });
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+      pressedKeys.clear();
+    };
+  }, [keyboardActive, onWalkModeExit, walkModeEnabled]);
+
+  useFrame((_state, delta) => {
+    if (!walkModeEnabled) {
+      pressedKeysRef.current.clear();
+      velocityRef.current.set(0, 0, 0);
+    }
+
+    if (walkModeEnabled) {
+      const keys = pressedKeysRef.current;
+      const forward = new Vector3();
+      const right = new Vector3();
+      const inputDirection = new Vector3();
+
+      if (!keyboardActive) {
+        keys.clear();
+      }
+
+      camera.getWorldDirection(forward);
+      forward.y = 0;
+      forward.normalize();
+      right.setFromMatrixColumn(camera.matrix, 0).normalize();
+      right.y = 0;
+      right.normalize();
+
+      if (keyboardActive) {
+        if (keys.has("w")) inputDirection.add(forward);
+        if (keys.has("s")) inputDirection.sub(forward);
+        if (keys.has("d")) inputDirection.add(right);
+        if (keys.has("a")) inputDirection.sub(right);
+        if (keys.has("e")) inputDirection.y += 1;
+        if (keys.has("q")) inputDirection.y -= 1;
+      }
+
+      if (inputDirection.lengthSq() > 0) {
+        const speed = WALK_BASE_SPEED * (keys.has("shift") ? WALK_SPRINT_MULTIPLIER : 1);
+        const targetVelocity = inputDirection.normalize().multiplyScalar(speed);
+        const accelerationBlend = 1 - Math.exp(-WALK_ACCELERATION * delta);
+        velocityRef.current.lerp(targetVelocity, accelerationBlend);
+      } else {
+        const dampingFactor = Math.exp(-WALK_DAMPING * delta);
+        velocityRef.current.multiplyScalar(dampingFactor);
+      }
+
+      if (velocityRef.current.lengthSq() < 0.00001) {
+        velocityRef.current.set(0, 0, 0);
+      }
+
+      if (velocityRef.current.lengthSq() > 0) {
+        const nextPosition = camera.position.clone().addScaledVector(velocityRef.current, delta);
+        nextPosition.x = Math.min(WALK_MAX_HORIZONTAL_DISTANCE, Math.max(-WALK_MAX_HORIZONTAL_DISTANCE, nextPosition.x));
+        nextPosition.y = Math.min(WALK_MAX_HEIGHT, Math.max(WALK_MIN_HEIGHT, nextPosition.y));
+        nextPosition.z = Math.min(WALK_MAX_HORIZONTAL_DISTANCE, Math.max(-WALK_MAX_HORIZONTAL_DISTANCE, nextPosition.z));
+
+        const appliedMovement = nextPosition.clone().sub(camera.position);
+        camera.position.add(appliedMovement);
+        desiredPosition.current.copy(camera.position);
+        animateRef.current = false;
+
+        if (controlsRef.current) {
+          controlsRef.current.target.add(appliedMovement);
+          controlsRef.current.target.x = Math.min(
+            WALK_MAX_HORIZONTAL_DISTANCE,
+            Math.max(-WALK_MAX_HORIZONTAL_DISTANCE, controlsRef.current.target.x),
+          );
+          controlsRef.current.target.y = Math.min(WALK_MAX_HEIGHT, Math.max(0, controlsRef.current.target.y));
+          controlsRef.current.target.z = Math.min(
+            WALK_MAX_HORIZONTAL_DISTANCE,
+            Math.max(-WALK_MAX_HORIZONTAL_DISTANCE, controlsRef.current.target.z),
+          );
+          desiredTarget.current.copy(controlsRef.current.target);
+          controlsRef.current.update();
+        }
+      }
+    }
+
     if (!animateRef.current) {
       return;
     }
@@ -1362,11 +1504,17 @@ export function RoomViewer({
   frameClassName,
 }: ViewerProps) {
   const { t } = useLanguage();
+  const viewerFrameRef = useRef<HTMLDivElement | null>(null);
   const controlsRef = useRef<OrbitControlsImpl | null>(null);
   const resolvedHelperText = helperText ?? t("viewerHelp");
   const [cameraCommand, setCameraCommand] = useState<{ type: CameraActionType; tick: number } | null>(
     null,
   );
+  const [walkModeEnabled, setWalkModeEnabled] = useState(false);
+  const [isViewerHovered, setIsViewerHovered] = useState(false);
+  const [isViewerFocused, setIsViewerFocused] = useState(false);
+  const [hasViewerInteraction, setHasViewerInteraction] = useState(false);
+  const keyboardActive = isViewerFocused || isViewerHovered || hasViewerInteraction;
   const resolvedFrameClassName =
     frameClassName ??
     "h-[58vh] min-h-[360px] max-h-[65vh] md:h-[500px] md:min-h-0 md:max-h-none lg:h-[620px] xl:h-[660px]";
@@ -1374,9 +1522,25 @@ export function RoomViewer({
   const issueCameraCommand = (type: CameraActionType) => {
     setCameraCommand({ type, tick: Date.now() });
   };
+  const displayedHelperText = walkModeEnabled ? t("walkModeActiveHelp") : resolvedHelperText;
 
   return (
-    <div className={`viewer-frame relative rounded-[30px] ${resolvedFrameClassName}`}>
+    <div
+      ref={viewerFrameRef}
+      tabIndex={0}
+      onBlur={() => {
+        setIsViewerFocused(false);
+        setHasViewerInteraction(false);
+      }}
+      onFocus={() => setIsViewerFocused(true)}
+      onMouseEnter={() => setIsViewerHovered(true)}
+      onMouseLeave={() => setIsViewerHovered(false)}
+      onPointerDown={() => {
+        setHasViewerInteraction(true);
+        window.requestAnimationFrame(() => viewerFrameRef.current?.focus());
+      }}
+      className={`viewer-frame relative rounded-[30px] outline-none ${resolvedFrameClassName}`}
+    >
       <Canvas
         shadows
         camera={{ position: room.cameraPosition, fov: 42 }}
@@ -1388,6 +1552,9 @@ export function RoomViewer({
           cameraPosition={room.cameraPosition}
           motionTrigger={motionTrigger}
           command={cameraCommand}
+          walkModeEnabled={walkModeEnabled}
+          keyboardActive={keyboardActive}
+          onWalkModeExit={() => setWalkModeEnabled(false)}
         />
         <RoomScene
           room={room}
@@ -1412,15 +1579,35 @@ export function RoomViewer({
           enableRotate={true}
           enablePan={true}
           enableDamping={true}
-          dampingFactor={0.08}
-          zoomSpeed={2}
-          rotateSpeed={1}
-          panSpeed={1}
+          dampingFactor={0.07}
+          zoomSpeed={1.35}
+          rotateSpeed={0.85}
+          panSpeed={0.85}
           minDistance={0.8}
           maxDistance={30}
           target={[0, 0.8, 0]}
         />
       </Canvas>
+
+      <button
+        type="button"
+        onClick={() => {
+          setWalkModeEnabled((current) => {
+            const nextEnabled = !current;
+            setHasViewerInteraction(nextEnabled);
+            return nextEnabled;
+          });
+          window.requestAnimationFrame(() => viewerFrameRef.current?.focus());
+        }}
+        className={`absolute left-4 top-4 z-10 rounded-full border px-3 py-2 text-xs font-bold transition ${
+          walkModeEnabled
+            ? "border-cyan-300/70 bg-cyan-400 text-slate-950 shadow-[0_0_24px_rgba(34,211,238,0.32)]"
+            : "border-white/15 bg-slate-950/62 text-slate-100 backdrop-blur hover:border-cyan-300/45 hover:bg-slate-900/82"
+        }`}
+        aria-pressed={walkModeEnabled}
+      >
+        {t("walkMode")} {walkModeEnabled ? "ON" : "OFF"}
+      </button>
 
       {showCameraButtons ? (
         <div className="absolute right-4 top-4 z-10 flex flex-wrap gap-2">
@@ -1450,7 +1637,7 @@ export function RoomViewer({
 
       <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-white/8 to-transparent" />
       <div className="pointer-events-none absolute inset-x-4 bottom-4 rounded-full border border-white/12 bg-slate-950/62 px-4 py-2 text-xs font-medium text-slate-100 backdrop-blur">
-        {resolvedHelperText}
+        {displayedHelperText}
       </div>
     </div>
   );
