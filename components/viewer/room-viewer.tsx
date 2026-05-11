@@ -17,6 +17,7 @@ import {
   Vector3,
 } from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
+import { useLanguage } from "@/lib/i18n";
 import {
   DemoObjectType,
   PlacedDemoObject,
@@ -1356,9 +1357,11 @@ export function RoomViewer({
   showCameraButtons = false,
   photoProjection,
   hideDecor = false,
-  helperText = "Left drag: rotate · Wheel: zoom · Right drag: pan",
+  helperText,
 }: ViewerProps) {
+  const { t } = useLanguage();
   const controlsRef = useRef<OrbitControlsImpl | null>(null);
+  const resolvedHelperText = helperText ?? t("viewerHelp");
   const [cameraCommand, setCameraCommand] = useState<{ type: CameraActionType; tick: number } | null>(
     null,
   );
@@ -1421,28 +1424,28 @@ export function RoomViewer({
             onClick={() => issueCameraCommand("zoom-in")}
             className="secondary-btn px-3 py-2 text-xs"
           >
-            Zoom In
+            {t("zoomIn")}
           </button>
           <button
             type="button"
             onClick={() => issueCameraCommand("zoom-out")}
             className="secondary-btn px-3 py-2 text-xs"
           >
-            Zoom Out
+            {t("zoomOut")}
           </button>
           <button
             type="button"
             onClick={() => issueCameraCommand("reset")}
             className="secondary-btn px-3 py-2 text-xs"
           >
-            Reset View
+            {t("resetView")}
           </button>
         </div>
       ) : null}
 
       <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-white/8 to-transparent" />
       <div className="pointer-events-none absolute inset-x-4 bottom-4 rounded-full border border-white/12 bg-slate-950/62 px-4 py-2 text-xs font-medium text-slate-100 backdrop-blur">
-        {helperText}
+        {resolvedHelperText}
       </div>
     </div>
   );

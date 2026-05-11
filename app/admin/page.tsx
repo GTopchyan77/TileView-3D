@@ -4,6 +4,7 @@ import Image from "next/image";
 import { ChangeEvent, FormEvent, useState } from "react";
 import { SiteNav } from "@/components/site-nav";
 import { useTiles } from "@/hooks/use-tiles";
+import { useLanguage } from "@/lib/i18n";
 import {
   getSupabaseBrowserClient,
   isSupabaseConfigured,
@@ -28,12 +29,12 @@ function TileThumbnail({
   src,
   alt,
   className,
-  errorLabel = "Image unavailable",
+  errorLabel,
 }: {
   src: string;
   alt: string;
   className?: string;
-  errorLabel?: string;
+  errorLabel: string;
 }) {
   const [hasError, setHasError] = useState(false);
   const imageSrc = hasError || !src ? "/tiles/placeholder.svg" : src;
@@ -59,6 +60,7 @@ function TileThumbnail({
 }
 
 export default function AdminPage() {
+  const { t } = useLanguage();
   const {
     defaultTiles,
     customTiles,
@@ -71,7 +73,7 @@ export default function AdminPage() {
   const [form, setForm] = useState(defaultForm);
   const [errorMessage, setErrorMessage] = useState<string>("");
   const [cloudMessage, setCloudMessage] = useState<string>(
-    isSupabaseConfigured() ? "" : "Cloud database is not configured. Using local demo storage.",
+    isSupabaseConfigured() ? "" : t("cloudNotConfigured"),
   );
   const [uploadedImageDataUrl, setUploadedImageDataUrl] = useState<string>("");
   const [uploadedFileName, setUploadedFileName] = useState<string>("");
@@ -89,15 +91,15 @@ export default function AdminPage() {
     const heightCm = Number(form.heightCm);
 
     if (!name) {
-      throw new Error("Tile name is required.");
+      throw new Error(t("tileNameRequired"));
     }
 
     if (!image) {
-      throw new Error("Either an uploaded image or an Image URL is required.");
+      throw new Error(t("imageRequired"));
     }
 
     if (!Number.isFinite(widthCm) || widthCm <= 0 || !Number.isFinite(heightCm) || heightCm <= 0) {
-      throw new Error("Width and height must be positive numbers.");
+      throw new Error(t("positiveDimensionsRequired"));
     }
 
     return {
@@ -121,7 +123,7 @@ export default function AdminPage() {
     }
 
     if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
-      setErrorMessage("Please upload a JPG, PNG, or WEBP image file.");
+      setErrorMessage(t("invalidImageType"));
       setUploadedImageDataUrl("");
       setUploadedFileName("");
       setUploadedFile(null);
@@ -131,7 +133,7 @@ export default function AdminPage() {
     }
 
     if (file.size > MAX_UPLOAD_SIZE_BYTES) {
-      setErrorMessage("Please upload an image under 5MB for this demo.");
+      setErrorMessage(t("imageTooLarge"));
       setUploadedImageDataUrl("");
       setUploadedFileName("");
       setUploadedFile(null);
@@ -146,7 +148,7 @@ export default function AdminPage() {
         const result = typeof reader.result === "string" ? reader.result : "";
 
         if (!result) {
-          setErrorMessage("Image preview failed.");
+          setErrorMessage(t("imagePreviewFailed"));
           setUploadedImageDataUrl("");
           setUploadedFileName("");
           return;
@@ -158,14 +160,14 @@ export default function AdminPage() {
         setErrorMessage("");
       };
       reader.onerror = () => {
-        setErrorMessage("The selected image could not be read.");
+        setErrorMessage(t("imageReadFailed"));
         setUploadedImageDataUrl("");
         setUploadedFileName("");
         setUploadedFile(null);
       };
       reader.readAsDataURL(file);
     } catch {
-      setErrorMessage("The selected image could not be processed.");
+      setErrorMessage(t("imageProcessFailed"));
       setUploadedImageDataUrl("");
       setUploadedFileName("");
       setUploadedFile(null);
@@ -192,20 +194,20 @@ export default function AdminPage() {
 
       addTile(tile);
       setErrorMessage("");
-      setCloudMessage(cloudConfigured ? cloudMessage : "Cloud database is not configured. Using local demo storage.");
+      setCloudMessage(cloudConfigured ? cloudMessage : t("cloudNotConfigured"));
       setForm(defaultForm);
       setUploadedImageDataUrl("");
       setUploadedFileName("");
       setUploadedFile(null);
       setFileInputKey((current) => current + 1);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "The tile could not be imported. Please try again with a valid image.");
+      setErrorMessage(error instanceof Error ? error.message : t("tileImportFailed"));
     }
   };
 
   const saveTileToCloud = async () => {
     if (!cloudConfigured) {
-      setCloudMessage("Cloud database is not configured. Using local demo storage.");
+      setCloudMessage(t("cloudNotConfigured"));
       return;
     }
 
@@ -216,7 +218,7 @@ export default function AdminPage() {
       const client = getSupabaseBrowserClient();
 
       if (!client) {
-        throw new Error("Cloud database is not configured. Using local demo storage.");
+        throw new Error(t("cloudNotConfigured"));
       }
 
       const draft = buildTileDraft();
@@ -258,9 +260,9 @@ export default function AdminPage() {
       }
 
       notifyCloudTilesChanged();
-      setCloudMessage("Saved to cloud database.");
+      setCloudMessage(t("savedToCloud"));
     } catch (error) {
-      setCloudMessage(error instanceof Error ? error.message : "Cloud save failed.");
+      setCloudMessage(error instanceof Error ? error.message : t("cloudSaveFailed"));
     } finally {
       setIsSavingToCloud(false);
     }
@@ -276,13 +278,12 @@ export default function AdminPage() {
         <div className="panel fade-in-up rounded-[36px] p-6 md:p-8">
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div className="max-w-3xl">
-              <p className="section-kicker">Admin Mock</p>
+              <p className="section-kicker">{t("adminMock")}</p>
               <h1 className="display-title mt-4 text-4xl font-semibold text-white md:text-5xl">
-                Demo catalog management
+                {t("adminTitle")}
               </h1>
               <p className="mt-4 text-sm leading-6 text-slate-200 md:text-base">
-                This page stays local-only for demo day. Imported tiles persist in browser storage,
-                bundled demo tiles remain read-only, and custom entries appear in the visualizer after refresh.
+                {t("adminIntro")}
               </p>
               {cloudMessage ? (
                 <p className="mt-3 text-sm text-sky-200">{cloudMessage}</p>
@@ -290,26 +291,26 @@ export default function AdminPage() {
             </div>
             <div className="glass-chip rounded-[24px] px-5 py-4 text-sm text-slate-300">
               <p className="font-semibold text-slate-50">
-                {defaultTiles.length + customTiles.length + cloudTiles.length} tiles available
+                {t("availableTilesCount", { count: defaultTiles.length + customTiles.length + cloudTiles.length })}
               </p>
-              <p className="mt-1">Use this page to expand the demo catalog on the fly.</p>
+              <p className="mt-1">{t("adminTilesAvailableHelp")}</p>
             </div>
           </div>
         </div>
 
         <section className="mt-6 grid gap-6 lg:grid-cols-[380px_minmax(0,1fr)]">
           <form onSubmit={submitForm} className="panel rounded-[30px] p-5">
-            <p className="section-kicker">Import Tile</p>
-            <p className="mt-3 text-2xl font-semibold text-slate-50">Create a local demo entry</p>
+            <p className="section-kicker">{t("importTile")}</p>
+            <p className="mt-3 text-2xl font-semibold text-slate-50">{t("createLocalEntry")}</p>
               <p className="mt-2 text-sm text-slate-300">
-              Imported tiles are stored in localStorage and can be deleted later from the Custom Tiles section.
+              {t("importLocalHelp")}
             </p>
             <p className="mt-2 text-sm text-sky-200">
-              For demo, upload tile images from your computer. Production will store files on the server.
+              {t("uploadDemoHelp")}
             </p>
             <div className="mt-5 space-y-4">
               <label className="block">
-                <span className="mb-2 block text-sm font-medium text-slate-200">Name</span>
+                <span className="mb-2 block text-sm font-medium text-slate-200">{t("name")}</span>
                 <input
                   required
                   value={form.name}
@@ -322,7 +323,7 @@ export default function AdminPage() {
                 />
               </label>
               <label className="block">
-                <span className="mb-2 block text-sm font-medium text-slate-200">Upload Image</span>
+                <span className="mb-2 block text-sm font-medium text-slate-200">{t("uploadImage")}</span>
                 <input
                   key={fileInputKey}
                   type="file"
@@ -331,16 +332,16 @@ export default function AdminPage() {
                   className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-200 outline-none file:mr-4 file:rounded-full file:border-0 file:bg-slate-100 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-slate-900"
                 />
                 <span className="mt-2 block text-xs text-slate-300/80">
-                  Choose a JPG, PNG, or WEBP tile image from your computer. Max 5MB.
+                  {t("imageUploadHelp")}
                 </span>
                 {uploadedFileName ? (
                   <span className="mt-2 block text-xs font-medium text-sky-200">
-                    Selected file: {uploadedFileName}
+                    {t("selectedFile", { fileName: uploadedFileName })}
                   </span>
                 ) : null}
               </label>
               <label className="block">
-                <span className="mb-2 block text-sm font-medium text-slate-200">Image URL (optional fallback)</span>
+                <span className="mb-2 block text-sm font-medium text-slate-200">{t("imageUrlFallback")}</span>
                 <input
                   value={form.imageUrl}
                   onChange={(event) => {
@@ -351,21 +352,21 @@ export default function AdminPage() {
                   placeholder="https://example.com/tile-texture.jpg"
                 />
                 <span className="mt-2 block text-xs text-slate-300/80">
-                  Used only if you do not upload a local image.
+                  {t("imageUrlFallbackHelp")}
                 </span>
               </label>
               <div className="glass-chip rounded-[22px] p-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">Preview thumbnail</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">{t("previewThumbnail")}</p>
                 <TileThumbnail
                   src={previewImage}
-                  alt="Imported tile preview"
-                  errorLabel="Image preview failed"
+                  alt={t("importedTilePreview")}
+                  errorLabel={t("imagePreviewFailed")}
                   className="mt-3 h-28 w-full rounded-[18px] border border-white/10"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <label className="block">
-                  <span className="mb-2 block text-sm font-medium text-slate-200">Width (cm)</span>
+                  <span className="mb-2 block text-sm font-medium text-slate-200">{t("widthCm")}</span>
                   <input
                     required
                     type="number"
@@ -379,7 +380,7 @@ export default function AdminPage() {
                   />
                 </label>
                 <label className="block">
-                  <span className="mb-2 block text-sm font-medium text-slate-200">Height (cm)</span>
+                  <span className="mb-2 block text-sm font-medium text-slate-200">{t("heightCm")}</span>
                   <input
                     required
                     type="number"
@@ -394,7 +395,7 @@ export default function AdminPage() {
                 </label>
               </div>
               <label className="block">
-                <span className="mb-2 block text-sm font-medium text-slate-200">Finish</span>
+                <span className="mb-2 block text-sm font-medium text-slate-200">{t("finish")}</span>
                 <input
                   value={form.finish}
                   onChange={(event) => setForm((current) => ({ ...current, finish: event.target.value }))}
@@ -402,7 +403,7 @@ export default function AdminPage() {
                 />
               </label>
               <label className="block">
-                <span className="mb-2 block text-sm font-medium text-slate-200">Tone</span>
+                <span className="mb-2 block text-sm font-medium text-slate-200">{t("tone")}</span>
                 <input
                   value={form.tone}
                   onChange={(event) => setForm((current) => ({ ...current, tone: event.target.value }))}
@@ -417,7 +418,7 @@ export default function AdminPage() {
             ) : null}
             <div className="mt-5 grid gap-3">
               <button type="submit" className="primary-btn w-full px-5 py-3 text-sm">
-                Import Tile
+                {t("importTile")}
               </button>
               <button
                 type="button"
@@ -425,7 +426,7 @@ export default function AdminPage() {
                 disabled={isSavingToCloud}
                 className="secondary-btn w-full px-5 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {isSavingToCloud ? "Saving..." : "Save to Cloud"}
+                {isSavingToCloud ? t("saving") : t("saveToCloud")}
               </button>
             </div>
           </form>
@@ -434,34 +435,34 @@ export default function AdminPage() {
             <section className="panel rounded-[30px] p-5">
               <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
                 <div>
-                  <p className="section-kicker">Custom Tiles</p>
-                  <p className="mt-3 text-2xl font-semibold text-slate-50">Imported demo entries</p>
+                  <p className="section-kicker">{t("customTiles")}</p>
+                  <p className="mt-3 text-2xl font-semibold text-slate-50">{t("importedDemoEntries")}</p>
                   <p className="mt-2 text-sm text-slate-300">
-                    These are local-only tiles. They can be deleted and will stay available after refresh in this browser.
+                    {t("customTilesHelp")}
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="rounded-full border border-sky-400/20 bg-sky-400/10 px-3 py-1 text-xs font-medium text-sky-200">
-                    {customTiles.length} custom
+                    {t("customCount", { count: customTiles.length })}
                   </span>
                   <span className="rounded-full border border-white/10 bg-white/6 px-3 py-1 text-xs font-medium text-slate-200">
-                    {cloudTiles.length} cloud
+                    {t("cloudCount", { count: cloudTiles.length })}
                   </span>
                   <button
                     type="button"
                     onClick={resetCustomTiles}
                     className="secondary-btn px-4 py-2 text-xs font-semibold"
                   >
-                    Reset Demo Data
+                    {t("resetDemoData")}
                   </button>
                 </div>
               </div>
 
               {customTiles.length === 0 ? (
                 <div className="mt-5 rounded-[26px] border border-dashed border-white/10 bg-white/4 p-8 text-center">
-                  <p className="text-lg font-semibold text-slate-50">No custom tiles yet</p>
+                  <p className="text-lg font-semibold text-slate-50">{t("noCustomTiles")}</p>
                   <p className="mt-2 text-sm text-slate-300">
-                    Use the Import Tile form to add a tile URL, dimensions, finish, and tone for the demo.
+                    {t("noCustomTilesHelp")}
                   </p>
                 </div>
               ) : (
@@ -471,6 +472,7 @@ export default function AdminPage() {
                       <TileThumbnail
                         src={tile.image}
                         alt={tile.name}
+                        errorLabel={t("imageUnavailable")}
                         className="h-32 w-full rounded-[22px] border border-white/10"
                       />
                       <div className="mt-4 flex items-start justify-between gap-3">
@@ -485,12 +487,12 @@ export default function AdminPage() {
                           onClick={() => deleteCustomTile(tile.id)}
                           className="danger-btn px-3 py-1.5 text-xs font-semibold"
                         >
-                          Delete
+                          {t("delete")}
                         </button>
                       </div>
                       <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-300">
-                        <span className="glass-chip rounded-full px-3 py-1">{tile.finish || "Finish"}</span>
-                        <span className="glass-chip rounded-full px-3 py-1">{tile.tone || "Tone"}</span>
+                        <span className="glass-chip rounded-full px-3 py-1">{tile.finish || t("finish")}</span>
+                        <span className="glass-chip rounded-full px-3 py-1">{tile.tone || t("tone")}</span>
                       </div>
                       <p className="mt-3 truncate text-xs text-slate-300/70">{tile.image}</p>
                     </div>
@@ -502,14 +504,14 @@ export default function AdminPage() {
             <section className="panel rounded-[30px] p-5">
               <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
                 <div>
-                  <p className="section-kicker">Default Demo Tiles</p>
-                  <p className="mt-3 text-2xl font-semibold text-slate-50">Bundled read-only tiles</p>
+                  <p className="section-kicker">{t("defaultDemoTiles")}</p>
+                  <p className="mt-3 text-2xl font-semibold text-slate-50">{t("bundledReadOnlyTiles")}</p>
                   <p className="mt-2 text-sm text-slate-300">
-                    These demo tiles come from the local JSON catalog and cannot be deleted from the admin page.
+                    {t("defaultTilesHelp")}
                   </p>
                 </div>
                 <span className="rounded-full border border-white/10 bg-white/6 px-3 py-1 text-xs font-medium text-slate-200">
-                  {defaultTiles.length} default
+                  {t("defaultCount", { count: defaultTiles.length })}
                 </span>
               </div>
 
@@ -519,6 +521,7 @@ export default function AdminPage() {
                     <TileThumbnail
                       src={tile.image}
                       alt={tile.name}
+                      errorLabel={t("imageUnavailable")}
                       className="h-32 w-full rounded-[22px] border border-white/10"
                     />
                     <div className="mt-4 flex items-start justify-between gap-3">
@@ -529,7 +532,7 @@ export default function AdminPage() {
                         </p>
                       </div>
                       <span className="rounded-full border border-white/10 bg-white/6 px-3 py-1.5 text-xs font-semibold text-slate-300">
-                        Read-only
+                        {t("readOnly")}
                       </span>
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-300">

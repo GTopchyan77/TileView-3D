@@ -17,6 +17,23 @@ export type DemoObjectType =
   | "microwave"
   | "wardrobe";
 
+export const ALL_OBJECT_TYPES = [
+  "sink",
+  "toilet",
+  "shower",
+  "vanity",
+  "mirror",
+  "counter",
+  "table",
+  "chair",
+  "sofa",
+  "bed",
+  "tv",
+  "refrigerator",
+  "microwave",
+  "wardrobe",
+] as const satisfies readonly DemoObjectType[];
+
 export type Tile = {
   id: string;
   name: string;

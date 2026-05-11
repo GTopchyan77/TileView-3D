@@ -5,10 +5,10 @@ import { usePathname } from "next/navigation";
 import { languages, useLanguage } from "@/lib/i18n";
 
 const navItems = [
-  { href: "/", label: "3D Visualizer" },
-  { href: "/floor-plan-to-3d-demo", label: "Floor Plan Demo" },
-  { href: "/admin", label: "Admin" },
-];
+  { href: "/", labelKey: "navVisualizer" },
+  { href: "/floor-plan-to-3d-demo", labelKey: "navFloorPlan" },
+  { href: "/admin", labelKey: "navAdmin" },
+] as const;
 
 export function SiteNav() {
   const pathname = usePathname();
@@ -19,12 +19,12 @@ export function SiteNav() {
       <nav className="panel mx-auto flex max-w-[1600px] items-center justify-between rounded-full px-4 py-3 md:px-6">
         <div className="flex items-center gap-3">
           <span className="glass-chip rounded-full px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-sky-200 shadow-[0_0_20px_rgba(56,189,248,0.16)]">
-            Demo Mode
+            {t("demoMode")}
           </span>
           <p className="text-[0.7rem] font-semibold uppercase tracking-[0.28em] text-slate-300">
-            Tile Demo
+            {t("tileDemo")}
           </p>
-          <p className="text-sm font-semibold text-slate-50 md:text-base">{t("title")}</p>
+          <p className="text-sm font-semibold text-slate-50 md:text-base">{t("appTitle")}</p>
         </div>
 
         <div className="flex items-center gap-2">
@@ -59,7 +59,7 @@ export function SiteNav() {
                       : "text-slate-200 hover:bg-white/8 hover:text-white"
                   }`}
                 >
-                  {item.label}
+                  {t(item.labelKey)}
                 </Link>
               );
             })}

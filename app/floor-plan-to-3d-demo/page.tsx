@@ -5,6 +5,7 @@ import { ChangeEvent, CSSProperties, useMemo, useRef, useState } from "react";
 import { SiteNav } from "@/components/site-nav";
 import { RoomViewer } from "@/components/viewer/room-viewer";
 import { useTiles } from "@/hooks/use-tiles";
+import { useLanguage } from "@/lib/i18n";
 import { RoomOpening, RoomTemplate, Tile, WallSurfaceId } from "@/types/tile";
 
 type SurfaceSelection = "floor" | WallSurfaceId;
@@ -16,7 +17,17 @@ type RoomDimensions = {
   heightM: number;
 };
 
-function TileThumbnail({ src, alt, className }: { src: string; alt: string; className?: string }) {
+function TileThumbnail({
+  src,
+  alt,
+  className,
+  errorLabel,
+}: {
+  src: string;
+  alt: string;
+  className?: string;
+  errorLabel: string;
+}) {
   const [hasError, setHasError] = useState(false);
   const imageSrc = hasError || !src ? "/tiles/placeholder.svg" : src;
 
@@ -33,7 +44,7 @@ function TileThumbnail({ src, alt, className }: { src: string; alt: string; clas
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/28 to-transparent" />
       {hasError ? (
         <div className="absolute inset-0 flex items-center justify-center bg-slate-950/80 px-3 text-center text-xs font-medium text-slate-300">
-          Image unavailable
+          {errorLabel}
         </div>
       ) : null}
     </div>
@@ -44,12 +55,18 @@ function TileCard({
   tile,
   selected,
   targetLabel,
+  activeLabel,
+  imageUnavailableLabel,
+  tapToApplyLabel,
   onClick,
   style,
 }: {
   tile: Tile;
   selected: boolean;
   targetLabel: string;
+  activeLabel: string;
+  imageUnavailableLabel: string;
+  tapToApplyLabel: string;
   onClick: () => void;
   style?: CSSProperties;
 }) {
@@ -63,6 +80,7 @@ function TileCard({
       <TileThumbnail
         src={tile.image}
         alt={tile.name}
+        errorLabel={imageUnavailableLabel}
         className="h-28 w-full rounded-[22px] border border-white/10"
       />
       <div className="mt-4 flex items-start justify-between gap-3">
@@ -74,7 +92,7 @@ function TileCard({
         </div>
         {selected ? (
           <span className="rounded-full border border-sky-400/25 bg-sky-400/12 px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-sky-200">
-            Active
+            {activeLabel}
           </span>
         ) : null}
       </div>
@@ -82,7 +100,7 @@ function TileCard({
         <span className="glass-chip rounded-full px-3 py-1">{tile.finish}</span>
         <span className="glass-chip rounded-full px-3 py-1">{tile.tone}</span>
       </div>
-      <p className="mt-3 text-xs font-medium text-slate-300/80">Tap to apply to {targetLabel}</p>
+      <p className="mt-3 text-xs font-medium text-slate-300/80">{tapToApplyLabel}</p>
     </button>
   );
 }
@@ -104,18 +122,6 @@ function readUploadedImage(event: ChangeEvent<HTMLInputElement>, onLoaded: (data
     onLoaded(typeof reader.result === "string" ? reader.result : "", file.name);
   };
   reader.readAsDataURL(file);
-}
-
-function getTargetLabel(surface: SurfaceSelection, wallApplyMode: WallApplyMode) {
-  if (surface === "floor") {
-    return "floor";
-  }
-
-  if (wallApplyMode === "all") {
-    return "all walls";
-  }
-
-  return `${surface} wall`;
 }
 
 function buildOpening(
@@ -159,6 +165,7 @@ function buildOpening(
 
 export default function FloorPlanTo3DDemoPage() {
   const { tiles } = useTiles();
+  const { t } = useLanguage();
   const viewerCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const [widthInput, setWidthInput] = useState("4.8");
   const [depthInput, setDepthInput] = useState("3.8");
@@ -193,8 +200,8 @@ export default function FloorPlanTo3DDemoPage() {
   const room = useMemo<RoomTemplate>(() => {
     return {
       id: "empty-room",
-      label: "Floor Plan Room",
-      description: "Dimension-driven room shell for floor plan preview.",
+      label: t("floorPlanRoom"),
+      description: t("floorPlanRoomDescription"),
       widthM: generatedRoom.widthM,
       depthM: generatedRoom.depthM,
       heightM: generatedRoom.heightM,
@@ -203,11 +210,19 @@ export default function FloorPlanTo3DDemoPage() {
       floorColor: "#ddd6cc",
       decor: [],
     };
-  }, [generatedRoom]);
+  }, [generatedRoom, t]);
 
   const activeTileId =
     selectedSurface === "floor" ? floorTileId : wallTileIds[selectedSurface];
-  const targetLabel = getTargetLabel(selectedSurface, wallApplyMode);
+  const targetLabel = selectedSurface === "floor"
+    ? t("floor")
+    : wallApplyMode === "all"
+      ? t("allWalls")
+      : selectedSurface === "back"
+        ? t("backWall")
+        : selectedSurface === "left"
+          ? t("leftWall")
+          : t("rightWall");
 
   const generateRoom = () => {
     const widthM = clampRoomValue(Number(widthInput) || 4.8, 2, 12);
@@ -274,27 +289,27 @@ export default function FloorPlanTo3DDemoPage() {
         <section className="panel fade-in-up rounded-[36px] p-6 md:p-8 xl:p-10">
           <div className="grid gap-8 xl:grid-cols-[minmax(0,1.1fr)_420px] xl:items-end">
             <div className="max-w-4xl">
-              <p className="section-kicker">Floor Plan to 3D Demo</p>
+              <p className="section-kicker">{t("floorPlanTitle")}</p>
               <h1 className="display-title mt-4 text-4xl font-semibold text-white md:text-6xl">
-                Generate a simple 3D room from entered dimensions
+                {t("floorPlanHero")}
               </h1>
               <p className="mt-5 max-w-3xl text-base leading-7 text-slate-200 md:text-lg">
-                This demo creates a 3D room from entered dimensions. Uploaded floor plan is used as a visual reference.
+                {t("floorPlanIntro")}
               </p>
               <div className="subtle-note mt-6 rounded-[24px] px-5 py-4 text-sm leading-6">
-                Automatic AI floor plan recognition can be added in production.
+                {t("floorPlanAiNote")}
               </div>
             </div>
             <div className="panel panel-hover rounded-[30px] p-5">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-200">
-                Demo flow
+                {t("demoFlow")}
               </p>
               <div className="mt-4 grid gap-3 text-sm text-slate-200">
                 {[
-                  "1. Enter room dimensions",
-                  "2. Upload a floor plan sketch if you have one",
-                  "3. Generate the room shell",
-                  "4. Select a surface and apply tiles",
+                  t("floorPlanStep1"),
+                  t("floorPlanStep2"),
+                  t("floorPlanStep3"),
+                  t("floorPlanStep4"),
                 ].map((step) => (
                   <div key={step} className="glass-chip rounded-[18px] px-4 py-3">
                     {step}
@@ -302,7 +317,7 @@ export default function FloorPlanTo3DDemoPage() {
                 ))}
               </div>
               <p className="mt-4 text-sm leading-6 text-slate-300">
-                Manual dimensions drive the room size. The optional uploaded floor plan is reference-only in this MVP.
+                {t("floorPlanIntro")}
               </p>
             </div>
           </div>
@@ -311,11 +326,11 @@ export default function FloorPlanTo3DDemoPage() {
         <section className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
           <aside className="flex flex-col gap-6">
             <div className="panel rounded-[30px] p-5">
-              <p className="section-kicker">Manual dimensions</p>
-              <p className="mt-3 text-xl font-semibold text-slate-50">Define the room shell</p>
+              <p className="section-kicker">{t("manualDimensions")}</p>
+              <p className="mt-3 text-xl font-semibold text-slate-50">{t("defineRoomShell")}</p>
               <div className="mt-5 grid gap-4">
                 <label>
-                  <span className="mb-2 block text-sm font-medium text-slate-200">Width meters</span>
+                  <span className="mb-2 block text-sm font-medium text-slate-200">{t("widthMeters")}</span>
                   <input
                     value={widthInput}
                     onChange={(event) => setWidthInput(event.target.value)}
@@ -324,7 +339,7 @@ export default function FloorPlanTo3DDemoPage() {
                   />
                 </label>
                 <label>
-                  <span className="mb-2 block text-sm font-medium text-slate-200">Depth meters</span>
+                  <span className="mb-2 block text-sm font-medium text-slate-200">{t("depthMeters")}</span>
                   <input
                     value={depthInput}
                     onChange={(event) => setDepthInput(event.target.value)}
@@ -333,7 +348,7 @@ export default function FloorPlanTo3DDemoPage() {
                   />
                 </label>
                 <label>
-                  <span className="mb-2 block text-sm font-medium text-slate-200">Height meters</span>
+                  <span className="mb-2 block text-sm font-medium text-slate-200">{t("heightMeters")}</span>
                   <input
                     value={heightInput}
                     onChange={(event) => setHeightInput(event.target.value)}
@@ -346,14 +361,14 @@ export default function FloorPlanTo3DDemoPage() {
                   onClick={generateRoom}
                   className="primary-btn generate-pulse px-5 py-3 text-sm"
                 >
-                  Generate Room
+                  {t("generateRoom")}
                 </button>
               </div>
             </div>
 
             <div className="panel rounded-[30px] p-5">
-              <p className="section-kicker">Floor plan upload</p>
-              <p className="mt-3 text-xl font-semibold text-slate-50">Optional sketch reference</p>
+              <p className="section-kicker">{t("floorPlanUpload")}</p>
+              <p className="mt-3 text-xl font-semibold text-slate-50">{t("optionalSketchReference")}</p>
               <input
                 type="file"
                 accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
@@ -366,34 +381,34 @@ export default function FloorPlanTo3DDemoPage() {
                 className="mt-5 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-200 outline-none file:mr-4 file:rounded-full file:border-0 file:bg-slate-100 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-slate-900"
               />
               <p className="mt-3 text-xs leading-6 text-slate-300/90">
-                This demo creates a 3D room from entered dimensions. Uploaded floor plan is used as a visual reference.
+                {t("floorPlanIntro")}
               </p>
               {referencePlanUrl ? (
                 <div className="mt-4 overflow-hidden rounded-[24px] border border-white/10 bg-slate-950/50">
                   <div className="relative aspect-[4/3]">
                     <Image
                       src={referencePlanUrl}
-                      alt={referencePlanName || "Uploaded floor plan reference"}
+                      alt={referencePlanName || t("uploadedFloorPlanReference")}
                       fill
                       unoptimized
                       className="object-cover"
                     />
                   </div>
                   <div className="border-t border-white/10 px-4 py-3 text-xs font-medium text-sky-200">
-                    {referencePlanName || "Floor plan reference uploaded"}
+                    {referencePlanName || t("floorPlanReferenceUploaded")}
                   </div>
                 </div>
               ) : null}
             </div>
 
             <div className="panel rounded-[30px] p-5">
-              <p className="section-kicker">Surface selection</p>
+              <p className="section-kicker">{t("surfaceSelection")}</p>
               <div className="mt-4 grid gap-3">
                 {[
-                  { id: "floor", label: "Floor", copy: "Apply floor tile to the room base." },
-                  { id: "back", label: "Back wall", copy: "Target the back wall only." },
-                  { id: "left", label: "Left wall", copy: "Target the left wall only." },
-                  { id: "right", label: "Right wall", copy: "Target the right wall only." },
+                  { id: "floor", label: t("floor"), copy: t("applyFloorCopy") },
+                  { id: "back", label: t("backWall"), copy: t("targetBackWallCopy") },
+                  { id: "left", label: t("leftWall"), copy: t("targetLeftWallCopy") },
+                  { id: "right", label: t("rightWall"), copy: t("targetRightWallCopy") },
                 ].map((surface) => {
                   const isActive = selectedSurface === surface.id;
 
@@ -419,7 +434,7 @@ export default function FloorPlanTo3DDemoPage() {
 
               <div className="mt-4 rounded-[24px] border border-white/10 bg-white/5 p-4">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">
-                  Wall tile mode
+                  {t("wallTileMode")}
                 </p>
                 <div className="mt-3 flex gap-3">
                   <button
@@ -429,7 +444,7 @@ export default function FloorPlanTo3DDemoPage() {
                       wallApplyMode === "selected" ? "border-sky-400/50 bg-sky-500/15 text-sky-100" : ""
                     }`}
                   >
-                    Selected wall
+                    {t("selectedWall")}
                   </button>
                   <button
                     type="button"
@@ -438,16 +453,16 @@ export default function FloorPlanTo3DDemoPage() {
                       wallApplyMode === "all" ? "border-sky-400/50 bg-sky-500/15 text-sky-100" : ""
                     }`}
                   >
-                    All walls
+                    {t("allWalls")}
                   </button>
                 </div>
               </div>
             </div>
 
             <div className="panel rounded-[30px] p-5">
-              <p className="section-kicker">Openings</p>
+              <p className="section-kicker">{t("openings")}</p>
               <p className="mt-3 text-sm leading-6 text-slate-300">
-                Add simple demo door or window markers to the currently selected wall.
+                {t("openingsHelp")}
               </p>
               <div className="mt-4 grid gap-3">
                 <button
@@ -458,7 +473,7 @@ export default function FloorPlanTo3DDemoPage() {
                     selectedSurface === "floor" ? "cursor-not-allowed opacity-55" : ""
                   }`}
                 >
-                  Add Door
+                  {t("addDoor")}
                 </button>
                 <button
                   type="button"
@@ -468,11 +483,11 @@ export default function FloorPlanTo3DDemoPage() {
                     selectedSurface === "floor" ? "cursor-not-allowed opacity-55" : ""
                   }`}
                 >
-                  Add Window
+                  {t("addWindow")}
                 </button>
               </div>
               <p className="mt-3 text-xs text-slate-300/85">
-                Openings are simple visual markers for the demo and do not cut geometry out of the wall.
+                {t("openingsNote")}
               </p>
             </div>
           </aside>
@@ -481,19 +496,19 @@ export default function FloorPlanTo3DDemoPage() {
             <div className="panel rounded-[32px] p-6 lg:p-7">
               <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <p className="section-kicker">3D room preview</p>
+                  <p className="section-kicker">{t("roomPreview3d")}</p>
                   <p className="mt-2 text-2xl font-semibold text-slate-50">
-                    Generated room shell from manual dimensions
+                    {t("generatedRoomShell")}
                   </p>
                   <p className="mt-2 text-sm leading-6 text-slate-300">
-                    This demo creates a 3D room from entered dimensions. Uploaded floor plan is used as a visual reference.
+                    {t("floorPlanIntro")}
                   </p>
                 </div>
                 <div className="glass-chip rounded-[22px] px-4 py-3 text-sm text-slate-200">
                   <p className="font-semibold text-slate-50">
                     {generatedRoom.widthM.toFixed(1)}m x {generatedRoom.depthM.toFixed(1)}m x {generatedRoom.heightM.toFixed(1)}m
                   </p>
-                  <p className="mt-1">Front wall is left open for camera access.</p>
+                  <p className="mt-1">{t("frontWallOpen")}</p>
                 </div>
               </div>
 
@@ -508,27 +523,27 @@ export default function FloorPlanTo3DDemoPage() {
                   }}
                   motionTrigger={motionTrigger}
                   showCameraButtons
-                  helperText="Left drag: rotate / Wheel: zoom / Right drag: pan"
+                  helperText={t("viewerHelp")}
                 />
               </div>
 
               <div className="mt-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                   <div className="glass-chip rounded-[20px] px-4 py-3 text-sm text-slate-200">
-                    <p className="font-semibold text-slate-50">Selected surface</p>
-                    <p className="mt-1 capitalize">{selectedSurface === "floor" ? "Floor" : `${selectedSurface} wall`}</p>
+                    <p className="font-semibold text-slate-50">{t("selectedSurface")}</p>
+                    <p className="mt-1 capitalize">{targetLabel}</p>
                   </div>
                   <div className="glass-chip rounded-[20px] px-4 py-3 text-sm text-slate-200">
-                    <p className="font-semibold text-slate-50">Wall tile mode</p>
-                    <p className="mt-1 capitalize">{wallApplyMode === "all" ? "All walls" : "Selected wall"}</p>
+                    <p className="font-semibold text-slate-50">{t("wallTileMode")}</p>
+                    <p className="mt-1 capitalize">{wallApplyMode === "all" ? t("allWalls") : t("selectedWall")}</p>
                   </div>
                   <div className="glass-chip rounded-[20px] px-4 py-3 text-sm text-slate-200">
-                    <p className="font-semibold text-slate-50">Openings</p>
-                    <p className="mt-1">{openings.length} markers placed</p>
+                    <p className="font-semibold text-slate-50">{t("openings")}</p>
+                    <p className="mt-1">{t("markersPlaced", { count: openings.length })}</p>
                   </div>
                   <div className="glass-chip rounded-[20px] px-4 py-3 text-sm text-slate-200">
-                    <p className="font-semibold text-slate-50">Reference plan</p>
-                    <p className="mt-1">{referencePlanUrl ? "Uploaded" : "Not uploaded"}</p>
+                    <p className="font-semibold text-slate-50">{t("referencePlan")}</p>
+                    <p className="mt-1">{referencePlanUrl ? t("uploaded") : t("notUploaded")}</p>
                   </div>
                 </div>
                 <button
@@ -536,7 +551,7 @@ export default function FloorPlanTo3DDemoPage() {
                   onClick={exportPreview}
                   className="primary-btn px-5 py-3 text-sm"
                 >
-                  Export Preview Image
+                  {t("exportPreviewImage")}
                 </button>
               </div>
             </div>
@@ -544,17 +559,17 @@ export default function FloorPlanTo3DDemoPage() {
             <section className="panel rounded-[34px] p-5 md:p-6">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div>
-                  <p className="section-kicker">Demo catalog</p>
+                  <p className="section-kicker">{t("tileCatalog")}</p>
                   <h2 className="mt-2 text-2xl font-semibold text-slate-50">
-                    Apply tile to the selected room surface
+                    {t("applyTileToSurface")}
                   </h2>
                   <p className="mt-2 text-sm text-slate-300">
-                    Current target: <span className="font-semibold capitalize text-slate-100">{targetLabel}</span>.
+                    {t("currentTarget", { target: targetLabel })}
                   </p>
                 </div>
                 <div className="glass-chip rounded-[22px] px-4 py-3 text-sm text-slate-200">
-                  <p className="font-semibold text-slate-50">{tiles.length} demo tiles</p>
-                  <p className="mt-1">Wall selections can target one wall or all walls.</p>
+                  <p className="font-semibold text-slate-50">{t("demoTilesCount", { count: tiles.length })}</p>
+                  <p className="mt-1">{t("wallSelectionsHelp")}</p>
                 </div>
               </div>
 
@@ -565,6 +580,9 @@ export default function FloorPlanTo3DDemoPage() {
                     tile={tile}
                     selected={activeTileId === tile.id}
                     targetLabel={targetLabel}
+                    activeLabel={t("active")}
+                    imageUnavailableLabel={t("imageUnavailable")}
+                    tapToApplyLabel={t("tapToApply", { target: targetLabel })}
                     onClick={() => applyTile(tile.id)}
                     style={{ animationDelay: `${index * 45}ms` }}
                   />
