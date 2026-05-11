@@ -6,10 +6,9 @@ import { SiteNav } from "@/components/site-nav";
 import { RoomViewer } from "@/components/viewer/room-viewer";
 import { useTiles } from "@/hooks/use-tiles";
 import { useLanguage } from "@/lib/i18n";
-import { RoomOpening, RoomTemplate, Tile, WallSurfaceId } from "@/types/tile";
+import { RoomOpening, RoomTemplate, SceneSurfaceSelection, Tile, WallSurfaceId } from "@/types/tile";
 
-type SurfaceSelection = "floor" | WallSurfaceId;
-type WallApplyMode = "selected" | "all";
+type SurfaceSelection = SceneSurfaceSelection;
 type OpeningKind = RoomOpening["kind"];
 type RoomDimensions = {
   widthM: number;
@@ -178,7 +177,6 @@ export default function FloorPlanTo3DDemoPage() {
   const [referencePlanUrl, setReferencePlanUrl] = useState("");
   const [referencePlanName, setReferencePlanName] = useState("");
   const [selectedSurface, setSelectedSurface] = useState<SurfaceSelection>("floor");
-  const [wallApplyMode, setWallApplyMode] = useState<WallApplyMode>("selected");
   const [floorTileId, setFloorTileId] = useState("travertine-sand");
   const [wallTileIds, setWallTileIds] = useState<Record<WallSurfaceId, string>>({
     back: "marble-ivory",
@@ -212,17 +210,35 @@ export default function FloorPlanTo3DDemoPage() {
     };
   }, [generatedRoom, t]);
 
-  const activeTileId =
-    selectedSurface === "floor" ? floorTileId : wallTileIds[selectedSurface];
+  const activeTileId = useMemo(() => {
+    if (selectedSurface === "floor") {
+      return floorTileId;
+    }
+
+    if (selectedSurface === "left-wall") {
+      return wallTileIds.left;
+    }
+
+    if (selectedSurface === "right-wall") {
+      return wallTileIds.right;
+    }
+
+    if (selectedSurface === "back-wall") {
+      return wallTileIds.back;
+    }
+
+    const uniqueWallTileIds = new Set(Object.values(wallTileIds));
+    return uniqueWallTileIds.size === 1 ? [...uniqueWallTileIds][0] : "";
+  }, [floorTileId, selectedSurface, wallTileIds]);
   const targetLabel = selectedSurface === "floor"
     ? t("floor")
-    : wallApplyMode === "all"
-      ? t("allWalls")
-      : selectedSurface === "back"
-        ? t("backWall")
-        : selectedSurface === "left"
-          ? t("leftWall")
-          : t("rightWall");
+    : selectedSurface === "left-wall"
+      ? t("leftWall")
+      : selectedSurface === "right-wall"
+        ? t("rightWall")
+        : selectedSurface === "back-wall"
+          ? t("backWall")
+          : t("allWalls");
 
   const generateRoom = () => {
     const widthM = clampRoomValue(Number(widthInput) || 4.8, 2, 12);
@@ -240,7 +256,7 @@ export default function FloorPlanTo3DDemoPage() {
       return;
     }
 
-    if (wallApplyMode === "all") {
+    if (selectedSurface === "all-walls") {
       setWallTileIds({
         back: tileId,
         left: tileId,
@@ -249,18 +265,22 @@ export default function FloorPlanTo3DDemoPage() {
       return;
     }
 
+    const wallKey: WallSurfaceId =
+      selectedSurface === "left-wall" ? "left" : selectedSurface === "right-wall" ? "right" : "back";
+
     setWallTileIds((current) => ({
       ...current,
-      [selectedSurface]: tileId,
+      [wallKey]: tileId,
     }));
   };
 
   const addOpening = (kind: OpeningKind) => {
-    if (selectedSurface === "floor") {
+    if (selectedSurface === "floor" || selectedSurface === "all-walls") {
       return;
     }
 
-    const wall = selectedSurface;
+    const wall: WallSurfaceId =
+      selectedSurface === "left-wall" ? "left" : selectedSurface === "right-wall" ? "right" : "back";
     const countOnWall = openings.filter((opening) => opening.wall === wall).length;
     const nextOpening = buildOpening(kind, wall, generatedRoom, countOnWall);
     setOpenings((current) => [...current, nextOpening]);
@@ -285,50 +305,44 @@ export default function FloorPlanTo3DDemoPage() {
         <SiteNav />
       </div>
 
-      <main className="mx-auto flex min-h-screen max-w-[1600px] flex-col gap-6 px-4 py-5 md:px-6 md:py-6">
-        <section className="panel fade-in-up rounded-[36px] p-6 md:p-8 xl:p-10">
-          <div className="grid gap-8 xl:grid-cols-[minmax(0,1.1fr)_420px] xl:items-end">
-            <div className="max-w-4xl">
+      <main className="mx-auto flex max-w-[1600px] flex-col gap-5 px-4 py-4 md:px-6 md:py-5">
+        <section className="panel fade-in-up rounded-[30px] px-4 py-4 md:px-5 md:py-4">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+            <div className="min-w-0 max-w-4xl">
               <p className="section-kicker">{t("floorPlanTitle")}</p>
-              <h1 className="display-title mt-4 text-4xl font-semibold text-white md:text-6xl">
+              <h1 className="mt-2 text-2xl font-semibold text-white md:text-3xl">
                 {t("floorPlanHero")}
               </h1>
-              <p className="mt-5 max-w-3xl text-base leading-7 text-slate-200 md:text-lg">
+              <p className="mt-2 max-w-3xl text-sm text-slate-300 md:text-[0.95rem]">
                 {t("floorPlanIntro")}
               </p>
-              <div className="subtle-note mt-6 rounded-[24px] px-5 py-4 text-sm leading-6">
-                {t("floorPlanAiNote")}
-              </div>
             </div>
-            <div className="panel panel-hover rounded-[30px] p-5">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-200">
+            <div className="min-w-0 xl:max-w-[720px]">
+              <p className="text-[0.7rem] font-semibold uppercase tracking-[0.2em] text-sky-200">
                 {t("demoFlow")}
               </p>
-              <div className="mt-4 grid gap-3 text-sm text-slate-200">
+              <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-200 md:text-sm">
                 {[
                   t("floorPlanStep1"),
                   t("floorPlanStep2"),
                   t("floorPlanStep3"),
                   t("floorPlanStep4"),
                 ].map((step) => (
-                  <div key={step} className="glass-chip rounded-[18px] px-4 py-3">
+                  <div key={step} className="glass-chip rounded-full px-3 py-2">
                     {step}
                   </div>
                 ))}
               </div>
-              <p className="mt-4 text-sm leading-6 text-slate-300">
-                {t("floorPlanIntro")}
-              </p>
             </div>
           </div>
         </section>
 
-        <section className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
-          <aside className="flex flex-col gap-6">
-            <div className="panel rounded-[30px] p-5">
+        <section className="grid gap-5 lg:grid-cols-[340px_minmax(0,1fr)]">
+          <aside className="flex flex-col gap-5">
+            <div className="panel rounded-[28px] p-4 md:p-5">
               <p className="section-kicker">{t("manualDimensions")}</p>
-              <p className="mt-3 text-xl font-semibold text-slate-50">{t("defineRoomShell")}</p>
-              <div className="mt-5 grid gap-4">
+              <p className="mt-2 text-lg font-semibold text-slate-50">{t("defineRoomShell")}</p>
+              <div className="mt-4 grid gap-4">
                 <label>
                   <span className="mb-2 block text-sm font-medium text-slate-200">{t("widthMeters")}</span>
                   <input
@@ -366,9 +380,9 @@ export default function FloorPlanTo3DDemoPage() {
               </div>
             </div>
 
-            <div className="panel rounded-[30px] p-5">
+            <div className="panel rounded-[28px] p-4 md:p-5">
               <p className="section-kicker">{t("floorPlanUpload")}</p>
-              <p className="mt-3 text-xl font-semibold text-slate-50">{t("optionalSketchReference")}</p>
+              <p className="mt-2 text-lg font-semibold text-slate-50">{t("optionalSketchReference")}</p>
               <input
                 type="file"
                 accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
@@ -380,9 +394,6 @@ export default function FloorPlanTo3DDemoPage() {
                 }
                 className="mt-5 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-200 outline-none file:mr-4 file:rounded-full file:border-0 file:bg-slate-100 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-slate-900"
               />
-              <p className="mt-3 text-xs leading-6 text-slate-300/90">
-                {t("floorPlanIntro")}
-              </p>
               {referencePlanUrl ? (
                 <div className="mt-4 overflow-hidden rounded-[24px] border border-white/10 bg-slate-950/50">
                   <div className="relative aspect-[4/3]">
@@ -401,14 +412,15 @@ export default function FloorPlanTo3DDemoPage() {
               ) : null}
             </div>
 
-            <div className="panel rounded-[30px] p-5">
-              <p className="section-kicker">{t("surfaceSelection")}</p>
+            <div className="panel rounded-[28px] p-4 md:p-5">
+              <p className="section-kicker">{t("chooseSurface")}</p>
               <div className="mt-4 grid gap-3">
                 {[
                   { id: "floor", label: t("floor"), copy: t("applyFloorCopy") },
-                  { id: "back", label: t("backWall"), copy: t("targetBackWallCopy") },
-                  { id: "left", label: t("leftWall"), copy: t("targetLeftWallCopy") },
-                  { id: "right", label: t("rightWall"), copy: t("targetRightWallCopy") },
+                  { id: "left-wall", label: t("leftWall"), copy: t("targetLeftWallCopy") },
+                  { id: "right-wall", label: t("rightWall"), copy: t("targetRightWallCopy") },
+                  { id: "back-wall", label: t("backWall"), copy: t("targetBackWallCopy") },
+                  { id: "all-walls", label: t("allWalls"), copy: t("wallSelectionsHelp") },
                 ].map((surface) => {
                   const isActive = selectedSurface === surface.id;
 
@@ -431,46 +443,20 @@ export default function FloorPlanTo3DDemoPage() {
                   );
                 })}
               </div>
-
-              <div className="mt-4 rounded-[24px] border border-white/10 bg-white/5 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">
-                  {t("wallTileMode")}
-                </p>
-                <div className="mt-3 flex gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setWallApplyMode("selected")}
-                    className={`secondary-btn px-4 py-2 text-sm ${
-                      wallApplyMode === "selected" ? "border-sky-400/50 bg-sky-500/15 text-sky-100" : ""
-                    }`}
-                  >
-                    {t("selectedWall")}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setWallApplyMode("all")}
-                    className={`secondary-btn px-4 py-2 text-sm ${
-                      wallApplyMode === "all" ? "border-sky-400/50 bg-sky-500/15 text-sky-100" : ""
-                    }`}
-                  >
-                    {t("allWalls")}
-                  </button>
-                </div>
-              </div>
             </div>
 
-            <div className="panel rounded-[30px] p-5">
+            <div className="panel rounded-[28px] p-4 md:p-5">
               <p className="section-kicker">{t("openings")}</p>
-              <p className="mt-3 text-sm leading-6 text-slate-300">
+              <p className="mt-2 text-sm leading-6 text-slate-300">
                 {t("openingsHelp")}
               </p>
               <div className="mt-4 grid gap-3">
                 <button
                   type="button"
                   onClick={() => addOpening("door")}
-                  disabled={selectedSurface === "floor"}
+                  disabled={selectedSurface === "floor" || selectedSurface === "all-walls"}
                   className={`secondary-btn px-5 py-3 text-sm ${
-                    selectedSurface === "floor" ? "cursor-not-allowed opacity-55" : ""
+                    selectedSurface === "floor" || selectedSurface === "all-walls" ? "cursor-not-allowed opacity-55" : ""
                   }`}
                 >
                   {t("addDoor")}
@@ -478,9 +464,9 @@ export default function FloorPlanTo3DDemoPage() {
                 <button
                   type="button"
                   onClick={() => addOpening("window")}
-                  disabled={selectedSurface === "floor"}
+                  disabled={selectedSurface === "floor" || selectedSurface === "all-walls"}
                   className={`secondary-btn px-5 py-3 text-sm ${
-                    selectedSurface === "floor" ? "cursor-not-allowed opacity-55" : ""
+                    selectedSurface === "floor" || selectedSurface === "all-walls" ? "cursor-not-allowed opacity-55" : ""
                   }`}
                 >
                   {t("addWindow")}
@@ -493,15 +479,12 @@ export default function FloorPlanTo3DDemoPage() {
           </aside>
 
           <section className="flex flex-col gap-6">
-            <div className="panel rounded-[32px] p-6 lg:p-7">
-              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="panel rounded-[30px] p-5 lg:p-6">
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                 <div>
                   <p className="section-kicker">{t("roomPreview3d")}</p>
-                  <p className="mt-2 text-2xl font-semibold text-slate-50">
+                  <p className="mt-2 text-xl font-semibold text-slate-50 md:text-2xl">
                     {t("generatedRoomShell")}
-                  </p>
-                  <p className="mt-2 text-sm leading-6 text-slate-300">
-                    {t("floorPlanIntro")}
                   </p>
                 </div>
                 <div className="glass-chip rounded-[22px] px-4 py-3 text-sm text-slate-200">
@@ -524,26 +507,27 @@ export default function FloorPlanTo3DDemoPage() {
                   motionTrigger={motionTrigger}
                   showCameraButtons
                   helperText={t("viewerHelp")}
+                  frameClassName="h-[42vh] min-h-[300px] max-h-[520px] md:h-[400px] md:max-h-none lg:h-[460px] xl:h-[520px]"
                 />
               </div>
 
               <div className="mt-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                   <div className="glass-chip rounded-[20px] px-4 py-3 text-sm text-slate-200">
-                    <p className="font-semibold text-slate-50">{t("selectedSurface")}</p>
-                    <p className="mt-1 capitalize">{targetLabel}</p>
+                    <p className="font-semibold text-slate-50">{t("floor")}</p>
+                    <p className="mt-1">{floorTile?.name ?? t("none")}</p>
                   </div>
                   <div className="glass-chip rounded-[20px] px-4 py-3 text-sm text-slate-200">
-                    <p className="font-semibold text-slate-50">{t("wallTileMode")}</p>
-                    <p className="mt-1 capitalize">{wallApplyMode === "all" ? t("allWalls") : t("selectedWall")}</p>
+                    <p className="font-semibold text-slate-50">{t("leftWall")}</p>
+                    <p className="mt-1">{wallSurfaceTiles.left?.name ?? t("none")}</p>
                   </div>
                   <div className="glass-chip rounded-[20px] px-4 py-3 text-sm text-slate-200">
-                    <p className="font-semibold text-slate-50">{t("openings")}</p>
-                    <p className="mt-1">{t("markersPlaced", { count: openings.length })}</p>
+                    <p className="font-semibold text-slate-50">{t("rightWall")}</p>
+                    <p className="mt-1">{wallSurfaceTiles.right?.name ?? t("none")}</p>
                   </div>
                   <div className="glass-chip rounded-[20px] px-4 py-3 text-sm text-slate-200">
-                    <p className="font-semibold text-slate-50">{t("referencePlan")}</p>
-                    <p className="mt-1">{referencePlanUrl ? t("uploaded") : t("notUploaded")}</p>
+                    <p className="font-semibold text-slate-50">{t("backWall")}</p>
+                    <p className="mt-1">{wallSurfaceTiles.back?.name ?? t("none")}</p>
                   </div>
                 </div>
                 <button

@@ -50,6 +50,7 @@ type ViewerProps = {
   photoProjection?: PhotoProjectionConfig;
   hideDecor?: boolean;
   helperText?: string;
+  frameClassName?: string;
   placedObjects?: PlacedDemoObject[];
   selectedObjectId?: string | null;
   onSelectObject?: (objectId: string) => void;
@@ -1358,6 +1359,7 @@ export function RoomViewer({
   photoProjection,
   hideDecor = false,
   helperText,
+  frameClassName,
 }: ViewerProps) {
   const { t } = useLanguage();
   const controlsRef = useRef<OrbitControlsImpl | null>(null);
@@ -1365,13 +1367,16 @@ export function RoomViewer({
   const [cameraCommand, setCameraCommand] = useState<{ type: CameraActionType; tick: number } | null>(
     null,
   );
+  const resolvedFrameClassName =
+    frameClassName ??
+    "h-[58vh] min-h-[360px] max-h-[65vh] md:h-[500px] md:min-h-0 md:max-h-none lg:h-[620px] xl:h-[660px]";
 
   const issueCameraCommand = (type: CameraActionType) => {
     setCameraCommand({ type, tick: Date.now() });
   };
 
   return (
-    <div className="viewer-frame relative h-[58vh] min-h-[360px] max-h-[65vh] rounded-[30px] md:h-[500px] md:min-h-0 md:max-h-none lg:h-[620px] xl:h-[660px]">
+    <div className={`viewer-frame relative rounded-[30px] ${resolvedFrameClassName}`}>
       <Canvas
         shadows
         camera={{ position: room.cameraPosition, fov: 42 }}
