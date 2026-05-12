@@ -6,6 +6,11 @@ import type { ReactNode } from "react";
 import { SiteNav } from "@/components/site-nav";
 import { useTiles } from "@/hooks/use-tiles";
 import { translateObjectLabel, translateRoomDescription, translateRoomLabel, useLanguage } from "@/lib/i18n";
+import {
+  CatalogMode,
+  getCatalogTiles,
+  getTileCategory,
+} from "@/lib/material-recommendations";
 import { roomTemplates } from "@/lib/room-templates";
 import { SAVED_SCENE_STORAGE_KEY } from "@/lib/storage";
 import { getSupabaseBrowserClient, isSupabaseConfigured, mapCloudScene } from "@/lib/supabase/client";
@@ -22,6 +27,12 @@ import {
 import { RoomViewer } from "./room-viewer";
 
 type SurfaceSelection = SceneSurfaceSelection;
+
+const materialCategoryLabelKeys = {
+  tile: "tiles",
+  wallpaper: "wallpapers",
+  laminate: "laminates",
+} as const;
 
 const objectOptions: Array<{ value: DemoObjectType }> = [
   { value: "sink" },
@@ -248,6 +259,7 @@ function TileCard({
   tile,
   selected,
   targetLabel,
+  categoryLabel,
   activeLabel,
   imageUnavailableLabel,
   tapToApplyLabel,
@@ -256,6 +268,7 @@ function TileCard({
   tile: Tile;
   selected: boolean;
   targetLabel: string;
+  categoryLabel: string;
   activeLabel: string;
   imageUnavailableLabel: string;
   tapToApplyLabel: string;
@@ -287,6 +300,7 @@ function TileCard({
         ) : null}
       </div>
       <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-300">
+        <span className="glass-chip rounded-full px-3 py-1">{categoryLabel}</span>
         <span className="glass-chip rounded-full px-3 py-1">{tile.finish}</span>
         <span className="glass-chip rounded-full px-3 py-1">{tile.tone}</span>
       </div>
@@ -327,6 +341,7 @@ export function VisualizerShell() {
   const { t } = useLanguage();
   const [roomId, setRoomId] = useState<RoomTemplateId>("bathroom");
   const [surfaceTarget, setSurfaceTarget] = useState<SurfaceSelection>("floor");
+  const [catalogMode, setCatalogMode] = useState<CatalogMode>("recommended");
   const [floorTileId, setFloorTileId] = useState<string>("travertine-sand");
   const [wallTileIds, setWallTileIds] = useState<Record<WallSurfaceId, string>>({
     left: "marble-ivory",
@@ -420,6 +435,15 @@ export function VisualizerShell() {
 
     return t("allWalls");
   }, [surfaceTarget, t]);
+  const recommendedTiles = useMemo(
+    () => getCatalogTiles(tiles, room.id, surfaceTarget, "recommended"),
+    [room.id, surfaceTarget, tiles],
+  );
+  const catalogTiles = useMemo(
+    () => getCatalogTiles(tiles, room.id, surfaceTarget, catalogMode),
+    [catalogMode, room.id, surfaceTarget, tiles],
+  );
+  const materialCategoryLabel = (tile: Tile) => t(materialCategoryLabelKeys[getTileCategory(tile)]);
   const selectedObject = placedObjects.find((object) => object.id === selectedObjectId) ?? null;
   const getObjectLabel = (type: DemoObjectType) => translateObjectLabel(type, t);
 
@@ -1150,17 +1174,34 @@ export function VisualizerShell() {
 
                   <AccordionSection
                     title={t("tileCatalog")}
-                    subtitle={t("demoTilesCount", { count: tiles.length })}
+                    subtitle={t("demoTilesCount", { count: catalogTiles.length })}
                     openLabel={t("open")}
                     defaultOpen
                   >
+                    <div className="mb-3 flex gap-2">
+                      {(["recommended", "all"] as const).map((mode) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          onClick={() => setCatalogMode(mode)}
+                          className={`rounded-full px-3 py-2 text-xs font-semibold transition ${
+                            catalogMode === mode
+                              ? "bg-sky-400 text-slate-950"
+                              : "bg-white/8 text-slate-200 hover:bg-white/12"
+                          }`}
+                        >
+                          {mode === "recommended" ? t("recommended") : t("all")}
+                        </button>
+                      ))}
+                    </div>
                     <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-2">
-                      {tiles.map((tile) => (
+                      {catalogTiles.map((tile) => (
                         <div key={tile.id} className="min-w-[220px] flex-none">
                           <TileCard
                             tile={tile}
                             selected={selectedTileId === tile.id}
                             targetLabel={targetLabel}
+                            categoryLabel={materialCategoryLabel(tile)}
                             activeLabel={t("active")}
                             imageUnavailableLabel={t("imageUnavailable")}
                             tapToApplyLabel={t("tapToApply", { target: targetLabel })}
@@ -1215,18 +1256,38 @@ export function VisualizerShell() {
                       </p>
                     </div>
                     <div className="glass-chip rounded-[22px] px-4 py-3 text-sm text-slate-300">
-                      <p className="font-semibold text-slate-50">{t("demoTilesCount", { count: tiles.length })}</p>
+                      <p className="font-semibold text-slate-50">
+                        {t("recommendedMaterialsCount", { count: recommendedTiles.length })}
+                      </p>
                       <p className="mt-1">{t("selectTileInstantly")}</p>
                     </div>
                   </div>
 
+                  <div className="mt-5 flex flex-wrap gap-2">
+                    {(["recommended", "all"] as const).map((mode) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => setCatalogMode(mode)}
+                        className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                          catalogMode === mode
+                            ? "bg-sky-400 text-slate-950 shadow-[0_0_22px_rgba(56,189,248,0.24)]"
+                            : "bg-white/8 text-slate-200 hover:bg-white/12"
+                        }`}
+                      >
+                        {mode === "recommended" ? t("recommended") : t("all")}
+                      </button>
+                    ))}
+                  </div>
+
                   <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-                    {tiles.map((tile) => (
+                    {catalogTiles.map((tile) => (
                       <TileCard
                         key={tile.id}
                         tile={tile}
                         selected={selectedTileId === tile.id}
                         targetLabel={targetLabel}
+                        categoryLabel={materialCategoryLabel(tile)}
                         activeLabel={t("active")}
                         imageUnavailableLabel={t("imageUnavailable")}
                         tapToApplyLabel={t("tapToApply", { target: targetLabel })}

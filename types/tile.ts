@@ -1,6 +1,7 @@
 export type SurfaceTarget = "floor" | "wall";
 export type WallSurfaceId = "back" | "left" | "right";
 export type SceneSurfaceSelection = "floor" | "left-wall" | "right-wall" | "back-wall" | "all-walls";
+export type MaterialCategory = "tile" | "wallpaper" | "laminate";
 export type DemoObjectType =
   | "sink"
   | "toilet"
@@ -42,6 +43,9 @@ export type Tile = {
   heightCm: number;
   finish: string;
   tone: string;
+  category?: MaterialCategory;
+  applicableSurfaces?: SurfaceTarget[];
+  recommendedRooms?: RoomTemplateId[];
 };
 
 export type RoomTemplateId = "bathroom" | "kitchen" | "living-room" | "bedroom" | "empty-room";

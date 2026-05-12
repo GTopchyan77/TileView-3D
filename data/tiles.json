@@ -43,5 +43,53 @@
     "heightCm": 45,
     "finish": "Matte",
     "tone": "Cream Mix"
+  },
+  {
+    "id": "laminate-oak-honey",
+    "name": "Laminate Oak Honey",
+    "image": "/tiles/laminate-oak-honey.svg",
+    "widthCm": 120,
+    "heightCm": 20,
+    "finish": "Wood plank",
+    "tone": "Honey Oak",
+    "category": "laminate",
+    "applicableSurfaces": ["floor"],
+    "recommendedRooms": ["kitchen", "living-room", "bedroom", "empty-room"]
+  },
+  {
+    "id": "laminate-walnut-smoke",
+    "name": "Laminate Walnut Smoke",
+    "image": "/tiles/laminate-walnut-smoke.svg",
+    "widthCm": 120,
+    "heightCm": 22,
+    "finish": "Brushed wood",
+    "tone": "Smoked Walnut",
+    "category": "laminate",
+    "applicableSurfaces": ["floor"],
+    "recommendedRooms": ["kitchen", "living-room", "bedroom"]
+  },
+  {
+    "id": "wallpaper-linen-oat",
+    "name": "Wallpaper Linen Oat",
+    "image": "/tiles/wallpaper-linen-oat.svg",
+    "widthCm": 52,
+    "heightCm": 52,
+    "finish": "Textile",
+    "tone": "Soft Oat",
+    "category": "wallpaper",
+    "applicableSurfaces": ["wall"],
+    "recommendedRooms": ["kitchen", "living-room", "bedroom", "empty-room"]
+  },
+  {
+    "id": "wallpaper-botanical-mist",
+    "name": "Wallpaper Botanical Mist",
+    "image": "/tiles/wallpaper-botanical-mist.svg",
+    "widthCm": 52,
+    "heightCm": 70,
+    "finish": "Patterned",
+    "tone": "Sage Mist",
+    "category": "wallpaper",
+    "applicableSurfaces": ["wall"],
+    "recommendedRooms": ["living-room", "bedroom", "empty-room"]
   }
 ]
