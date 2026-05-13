@@ -66,6 +66,24 @@ export function mapCloudTile(row: CloudTileRow): Tile {
 }
 
 export function mapCloudScene(row: CloudSceneRow): SavedSceneData {
+  const objectsPayload = row.objects;
+  const roomStates =
+    objectsPayload &&
+    typeof objectsPayload === "object" &&
+    !Array.isArray(objectsPayload) &&
+    "roomStates" in objectsPayload
+      ? (objectsPayload as { roomStates?: SavedSceneData["roomStates"] }).roomStates
+      : undefined;
+  const legacyObjects = Array.isArray(objectsPayload)
+    ? (objectsPayload as SavedSceneData["objects"])
+    : objectsPayload &&
+        typeof objectsPayload === "object" &&
+        !Array.isArray(objectsPayload) &&
+        "legacyObjects" in objectsPayload &&
+        Array.isArray((objectsPayload as { legacyObjects?: unknown }).legacyObjects)
+      ? ((objectsPayload as { legacyObjects: SavedSceneData["objects"] }).legacyObjects)
+      : [];
+
   return {
     name: row.name,
     roomType: row.room_type as SavedSceneData["roomType"],
@@ -74,7 +92,8 @@ export function mapCloudScene(row: CloudSceneRow): SavedSceneData {
     leftWallTileId: row.left_wall_tile_id ?? "",
     rightWallTileId: row.right_wall_tile_id ?? "",
     backWallTileId: row.back_wall_tile_id ?? "",
-    objects: Array.isArray(row.objects) ? (row.objects as SavedSceneData["objects"]) : [],
+    objects: legacyObjects,
+    roomStates,
   };
 }
 

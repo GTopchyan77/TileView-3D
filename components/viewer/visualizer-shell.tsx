@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { SiteNav } from "@/components/site-nav";
 import { useTiles } from "@/hooks/use-tiles";
@@ -19,12 +19,15 @@ import {
   DemoObjectType,
   MaterialCategory,
   PlacedDemoObject,
+  RoomSceneData,
   RoomTemplateId,
   SavedSceneData,
+  SavedRoomSceneData,
   SceneSurfaceSelection,
   Tile,
   WallSurfaceId,
 } from "@/types/tile";
+import { ProjectSummary } from "./project-summary";
 import { RoomViewer } from "./room-viewer";
 
 type SurfaceSelection = SceneSurfaceSelection;
@@ -103,6 +106,69 @@ function isSurfaceSelection(value: string): value is SurfaceSelection {
   return VALID_SURFACE_TARGETS.has(value as SurfaceSelection);
 }
 
+function parseSavedRoomSceneData(value: unknown): SavedRoomSceneData | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const parsed = value as Partial<SavedRoomSceneData>;
+
+  if (
+    !isSurfaceSelection(String(parsed.activeSurface)) ||
+    typeof parsed.floorTileId !== "string" ||
+    typeof parsed.leftWallTileId !== "string" ||
+    typeof parsed.rightWallTileId !== "string" ||
+    typeof parsed.backWallTileId !== "string" ||
+    !Array.isArray(parsed.objects)
+  ) {
+    return null;
+  }
+
+  const objects = parsed.objects
+    .map((item) => {
+      if (
+        !item ||
+        typeof item !== "object" ||
+        typeof item.id !== "string" ||
+        !VALID_OBJECT_TYPES.has(item.type as DemoObjectType) ||
+        typeof item.x !== "number" ||
+        typeof item.z !== "number" ||
+        typeof item.rotationDeg !== "number" ||
+        typeof item.scale !== "number"
+      ) {
+        return null;
+      }
+
+      return {
+        id: item.id,
+        type: item.type as DemoObjectType,
+        x: item.x,
+        y: typeof item.y === "number" ? item.y : 0,
+        z: item.z,
+        rotationDeg: item.rotationDeg,
+        scale: item.scale,
+        modelYOffset: typeof item.modelYOffset === "number" ? item.modelYOffset : undefined,
+        isVisible: item.isVisible !== false,
+      };
+    })
+    .filter((item): item is NonNullable<typeof item> => item !== null);
+
+  const selectedObjectId =
+    typeof parsed.selectedObjectId === "string" || parsed.selectedObjectId === null
+      ? parsed.selectedObjectId
+      : undefined;
+
+  return {
+    activeSurface: parsed.activeSurface as SceneSurfaceSelection,
+    floorTileId: parsed.floorTileId,
+    leftWallTileId: parsed.leftWallTileId,
+    rightWallTileId: parsed.rightWallTileId,
+    backWallTileId: parsed.backWallTileId,
+    objects,
+    selectedObjectId,
+  };
+}
+
 function parseSavedSceneData(value: string | null): SavedSceneData | null {
   if (!value) {
     return null;
@@ -111,59 +177,52 @@ function parseSavedSceneData(value: string | null): SavedSceneData | null {
   try {
     const parsed = JSON.parse(value) as Partial<SavedSceneData> | null;
 
-    if (
-      !parsed ||
-      typeof parsed !== "object" ||
-      typeof parsed.name !== "string" ||
-      !isRoomTemplateId(String(parsed.roomType)) ||
-      !isSurfaceSelection(String(parsed.activeSurface)) ||
-      typeof parsed.floorTileId !== "string" ||
-      typeof parsed.leftWallTileId !== "string" ||
-      typeof parsed.rightWallTileId !== "string" ||
-      typeof parsed.backWallTileId !== "string" ||
-      !Array.isArray(parsed.objects)
-    ) {
+    if (!parsed || typeof parsed !== "object" || typeof parsed.name !== "string" || !isRoomTemplateId(String(parsed.roomType))) {
       return null;
     }
 
-    const objects = parsed.objects
-      .map((item) => {
-        if (
-          !item ||
-          typeof item !== "object" ||
-          typeof item.id !== "string" ||
-          !VALID_OBJECT_TYPES.has(item.type as DemoObjectType) ||
-          typeof item.x !== "number" ||
-          typeof item.z !== "number" ||
-          typeof item.rotationDeg !== "number" ||
-          typeof item.scale !== "number"
-        ) {
-          return null;
-        }
-
-          return {
-            id: item.id,
-            type: item.type as DemoObjectType,
-            x: item.x,
-            y: typeof item.y === "number" ? item.y : 0,
-            z: item.z,
-            rotationDeg: item.rotationDeg,
-            scale: item.scale,
-            modelYOffset: typeof item.modelYOffset === "number" ? item.modelYOffset : undefined,
-            isVisible: item.isVisible !== false,
-          };
-        })
-      .filter((item): item is NonNullable<typeof item> => item !== null);
-
-    return {
-      name: parsed.name,
-      roomType: parsed.roomType as RoomTemplateId,
-      activeSurface: parsed.activeSurface as SurfaceSelection,
+    const legacyRoomScene = parseSavedRoomSceneData({
+      activeSurface: parsed.activeSurface,
       floorTileId: parsed.floorTileId,
       leftWallTileId: parsed.leftWallTileId,
       rightWallTileId: parsed.rightWallTileId,
       backWallTileId: parsed.backWallTileId,
-      objects,
+      objects: parsed.objects,
+    });
+
+    if (!legacyRoomScene) {
+      return null;
+    }
+
+    const roomStates = parsed.roomStates && typeof parsed.roomStates === "object"
+      ? Object.entries(parsed.roomStates).reduce(
+          (accumulator, [roomKey, roomState]) => {
+            if (!isRoomTemplateId(roomKey)) {
+              return accumulator;
+            }
+
+            const parsedRoomState = parseSavedRoomSceneData(roomState);
+
+            if (parsedRoomState) {
+              accumulator[roomKey] = parsedRoomState;
+            }
+
+            return accumulator;
+          },
+          {} as Partial<Record<RoomTemplateId, SavedRoomSceneData>>,
+        )
+      : undefined;
+
+    return {
+      name: parsed.name,
+      roomType: parsed.roomType as RoomTemplateId,
+      activeSurface: legacyRoomScene.activeSurface,
+      floorTileId: legacyRoomScene.floorTileId,
+      leftWallTileId: legacyRoomScene.leftWallTileId,
+      rightWallTileId: legacyRoomScene.rightWallTileId,
+      backWallTileId: legacyRoomScene.backWallTileId,
+      objects: legacyRoomScene.objects,
+      roomStates,
     };
   } catch {
     return null;
@@ -239,6 +298,33 @@ function createRoomObjects(roomId: RoomTemplateId, widthM: number, depthM: numbe
   }
 
   return [];
+}
+
+function createDefaultRoomScene(roomId: RoomTemplateId): RoomSceneData {
+  const room = roomTemplates.find((item) => item.id === roomId) ?? roomTemplates[0];
+  const objects = createRoomObjects(room.id, room.widthM, room.depthM);
+
+  return {
+    activeSurface: "floor",
+    floorTileId: "travertine-sand",
+    wallTileIds: {
+      left: "marble-ivory",
+      right: "marble-ivory",
+      back: "marble-ivory",
+    },
+    objects,
+    selectedObjectId: objects[0]?.id ?? null,
+  };
+}
+
+function createInitialRoomScenes(): Record<RoomTemplateId, RoomSceneData> {
+  return roomTemplates.reduce(
+    (accumulator, room) => {
+      accumulator[room.id] = createDefaultRoomScene(room.id);
+      return accumulator;
+    },
+    {} as Record<RoomTemplateId, RoomSceneData>,
+  );
 }
 
 function TileThumbnail({
@@ -360,24 +446,18 @@ export function VisualizerShell() {
   const { tiles, cloudConfigured, cloudError } = useTiles();
   const { t } = useLanguage();
   const [roomId, setRoomId] = useState<RoomTemplateId>("bathroom");
-  const [surfaceTarget, setSurfaceTarget] = useState<SurfaceSelection>("floor");
   const [catalogMode, setCatalogMode] = useState<CatalogMode>("recommended");
   const [categoryFilter, setCategoryFilter] = useState<MaterialCategoryFilter>("all");
   const [catalogSearch, setCatalogSearch] = useState("");
-  const [floorTileId, setFloorTileId] = useState<string>("travertine-sand");
-  const [wallTileIds, setWallTileIds] = useState<Record<WallSurfaceId, string>>({
-    left: "marble-ivory",
-    right: "marble-ivory",
-    back: "marble-ivory",
-  });
   const [canvasElement, setCanvasElement] = useState<HTMLCanvasElement | null>(null);
-  const initialRoom = roomTemplates.find((item) => item.id === "bathroom") ?? roomTemplates[0];
-  const [placedObjects, setPlacedObjects] = useState<PlacedDemoObject[]>(() =>
-    createRoomObjects(initialRoom.id, initialRoom.widthM, initialRoom.depthM),
-  );
-  const [selectedObjectId, setSelectedObjectId] = useState<string | null>(() =>
-    createRoomObjects(initialRoom.id, initialRoom.widthM, initialRoom.depthM)[0]?.id ?? null,
-  );
+  const [roomStates, setRoomStates] = useState<Record<RoomTemplateId, RoomSceneData>>(() => createInitialRoomScenes());
+  const initialRoom = roomTemplates.find((item) => item.id === roomId) ?? roomTemplates[0];
+  const currentRoomState = roomStates[roomId] ?? createDefaultRoomScene(roomId);
+  const surfaceTarget = currentRoomState.activeSurface;
+  const floorTileId = currentRoomState.floorTileId;
+  const wallTileIds = currentRoomState.wallTileIds;
+  const placedObjects = currentRoomState.objects;
+  const selectedObjectId = currentRoomState.selectedObjectId;
   const [objectRenderStates, setObjectRenderStates] = useState<Record<string, "gltf" | "placeholder">>(() =>
     Object.fromEntries(
       createRoomObjects(initialRoom.id, initialRoom.widthM, initialRoom.depthM).map((object) => [
@@ -390,6 +470,18 @@ export function VisualizerShell() {
   const [sceneStatus, setSceneStatus] = useState<string>("");
   const [isSavingSceneToCloud, setIsSavingSceneToCloud] = useState(false);
   const [isLoadingCloudScene, setIsLoadingCloudScene] = useState(false);
+  const updateRoomScene = useCallback(
+    (targetRoomId: RoomTemplateId, updater: (scene: RoomSceneData) => RoomSceneData) => {
+      setRoomStates((current) => {
+        const baseScene = current[targetRoomId] ?? createDefaultRoomScene(targetRoomId);
+        return {
+          ...current,
+          [targetRoomId]: updater(baseScene),
+        };
+      });
+    },
+    [],
+  );
 
   const room = useMemo(
     () => roomTemplates.find((item) => item.id === roomId) ?? roomTemplates[0],
@@ -482,17 +574,38 @@ export function VisualizerShell() {
   }, [baseCatalogTiles, catalogSearch, categoryFilter]);
   const materialCategoryLabel = (tile: Tile) => t(materialCategoryLabelKeys[getTileCategory(tile)]);
   const selectedObject = placedObjects.find((object) => object.id === selectedObjectId) ?? null;
-  const getObjectLabel = (type: DemoObjectType) => translateObjectLabel(type, t);
+  const getObjectLabel = useCallback(
+    (type: DemoObjectType) => translateObjectLabel(type, t),
+    [t],
+  );
+  const visiblePlacedObjects = useMemo(
+    () => placedObjects.filter((object) => object.isVisible !== false),
+    [placedObjects],
+  );
+  const summaryMaterialCategories = useMemo(() => {
+    const categories = new Set<MaterialCategory>();
 
-  const buildScenePayload = (): SavedSceneData => ({
-    name: `${translateRoomLabel(room.id, t)} Scene`,
-    roomType: room.id,
-    activeSurface: surfaceTarget,
-    floorTileId,
-    leftWallTileId: wallTileIds.left,
-    rightWallTileId: wallTileIds.right,
-    backWallTileId: wallTileIds.back,
-      objects: placedObjects.map((object) => ({
+    [floorTile, leftWallTile, rightWallTile, backWallTile].forEach((tile) => {
+      if (tile) {
+        categories.add(getTileCategory(tile));
+      }
+    });
+
+    return [...categories].map((category) => t(materialCategoryLabelKeys[category]));
+  }, [backWallTile, floorTile, leftWallTile, rightWallTile, t]);
+  const visibleObjectLabels = useMemo(
+    () => visiblePlacedObjects.map((object) => getObjectLabel(object.type)),
+    [getObjectLabel, visiblePlacedObjects],
+  );
+  const serializeRoomScene = useCallback(
+    (scene: RoomSceneData): SavedRoomSceneData => ({
+      activeSurface: scene.activeSurface,
+      floorTileId: scene.floorTileId,
+      leftWallTileId: scene.wallTileIds.left,
+      rightWallTileId: scene.wallTileIds.right,
+      backWallTileId: scene.wallTileIds.back,
+      selectedObjectId: scene.selectedObjectId,
+      objects: scene.objects.map((object) => ({
         id: object.id,
         type: object.type,
         x: object.x,
@@ -503,21 +616,67 @@ export function VisualizerShell() {
         modelYOffset: object.modelYOffset,
         isVisible: object.isVisible !== false,
       })),
-    });
+    }),
+    [],
+  );
+
+  const buildScenePayload = (): SavedSceneData => ({
+    name: `${translateRoomLabel(room.id, t)} Scene`,
+    roomType: room.id,
+    activeSurface: surfaceTarget,
+    floorTileId,
+    leftWallTileId: wallTileIds.left,
+    rightWallTileId: wallTileIds.right,
+    backWallTileId: wallTileIds.back,
+    objects: serializeRoomScene(currentRoomState).objects,
+    roomStates: Object.fromEntries(
+      Object.entries(roomStates).map(([key, scene]) => [key, serializeRoomScene(scene)]),
+    ) as Partial<Record<RoomTemplateId, SavedRoomSceneData>>,
+  });
 
   const applyScenePayload = (scene: SavedSceneData) => {
+    const nextRoomStates = createInitialRoomScenes();
+
+    if (scene.roomStates) {
+      Object.entries(scene.roomStates).forEach(([roomKey, roomScene]) => {
+        if (!isRoomTemplateId(roomKey) || !roomScene) {
+          return;
+        }
+
+        nextRoomStates[roomKey] = {
+          activeSurface: roomScene.activeSurface,
+          floorTileId: roomScene.floorTileId,
+          wallTileIds: {
+            left: roomScene.leftWallTileId,
+            right: roomScene.rightWallTileId,
+            back: roomScene.backWallTileId,
+          },
+          objects: roomScene.objects.map((object) => ({ ...object, isVisible: object.isVisible !== false })),
+          selectedObjectId:
+            typeof roomScene.selectedObjectId === "string" || roomScene.selectedObjectId === null
+              ? roomScene.selectedObjectId
+              : roomScene.objects[0]?.id ?? null,
+        };
+      });
+    } else {
+      nextRoomStates[scene.roomType] = {
+        activeSurface: scene.activeSurface,
+        floorTileId: scene.floorTileId,
+        wallTileIds: {
+          left: scene.leftWallTileId,
+          right: scene.rightWallTileId,
+          back: scene.backWallTileId,
+        },
+        objects: scene.objects.map((object) => ({ ...object, isVisible: object.isVisible !== false })),
+        selectedObjectId: scene.objects[0]?.id ?? null,
+      };
+    }
+
+    setRoomStates(nextRoomStates);
     setRoomId(scene.roomType);
-    setSurfaceTarget(scene.activeSurface);
-    setFloorTileId(scene.floorTileId);
-    setWallTileIds({
-      left: scene.leftWallTileId,
-      right: scene.rightWallTileId,
-      back: scene.backWallTileId,
-    });
-    setPlacedObjects(scene.objects.map((object) => ({ ...object, isVisible: object.isVisible !== false })));
-    setSelectedObjectId(scene.objects[0]?.id ?? null);
+    const activeScene = nextRoomStates[scene.roomType];
     setObjectRenderStates(
-      Object.fromEntries(scene.objects.map((object) => [object.id, "placeholder" as const])),
+      Object.fromEntries(activeScene.objects.map((object) => [object.id, "placeholder" as const])),
     );
     nextObjectIdRef.current = Date.now();
   };
@@ -572,7 +731,10 @@ export function VisualizerShell() {
         left_wall_tile_id: scene.leftWallTileId || null,
         right_wall_tile_id: scene.rightWallTileId || null,
         back_wall_tile_id: scene.backWallTileId || null,
-        objects: scene.objects,
+        objects: {
+          legacyObjects: scene.objects,
+          roomStates: scene.roomStates,
+        },
       });
 
       if (error) {
@@ -639,8 +801,11 @@ export function VisualizerShell() {
   const syncRoomObjects = (nextRoomId: RoomTemplateId) => {
     const nextRoom = roomTemplates.find((item) => item.id === nextRoomId) ?? roomTemplates[0];
     const nextObjects = createRoomObjects(nextRoom.id, nextRoom.widthM, nextRoom.depthM);
-    setPlacedObjects(nextObjects);
-    setSelectedObjectId(nextObjects[0]?.id ?? null);
+    updateRoomScene(nextRoomId, (current) => ({
+      ...current,
+      objects: nextObjects,
+      selectedObjectId: nextObjects[0]?.id ?? null,
+    }));
     setObjectRenderStates(
       Object.fromEntries(nextObjects.map((object) => [object.id, "placeholder" as const])),
     );
@@ -648,30 +813,42 @@ export function VisualizerShell() {
 
   const handleRoomChange = (nextRoomId: RoomTemplateId) => {
     setRoomId(nextRoomId);
-    syncRoomObjects(nextRoomId);
+    const nextScene = roomStates[nextRoomId] ?? createDefaultRoomScene(nextRoomId);
+    setObjectRenderStates(
+      Object.fromEntries(nextScene.objects.map((object) => [object.id, "placeholder" as const])),
+    );
   };
 
   const applyTile = (tileId: string) => {
     if (surfaceTarget === "floor") {
-      setFloorTileId(tileId);
+      updateRoomScene(room.id, (current) => ({
+        ...current,
+        floorTileId: tileId,
+      }));
       return;
     }
 
     if (surfaceTarget === "all-walls") {
-      setWallTileIds({
-        left: tileId,
-        right: tileId,
-        back: tileId,
-      });
+      updateRoomScene(room.id, (current) => ({
+        ...current,
+        wallTileIds: {
+          left: tileId,
+          right: tileId,
+          back: tileId,
+        },
+      }));
       return;
     }
 
     const wallKey: WallSurfaceId =
       surfaceTarget === "left-wall" ? "left" : surfaceTarget === "right-wall" ? "right" : "back";
 
-    setWallTileIds((current) => ({
+    updateRoomScene(room.id, (current) => ({
       ...current,
-      [wallKey]: tileId,
+      wallTileIds: {
+        ...current.wallTileIds,
+        [wallKey]: tileId,
+      },
     }));
   };
 
@@ -718,18 +895,22 @@ export function VisualizerShell() {
         isVisible: true,
       };
 
-    setPlacedObjects((current) => [...current, nextObject]);
-    setObjectRenderStates((current) => ({ ...current, [nextObject.id]: "placeholder" }));
-    setSelectedObjectId(nextObject.id);
-  };
+      updateRoomScene(room.id, (current) => ({
+        ...current,
+        objects: [...current.objects, nextObject],
+        selectedObjectId: nextObject.id,
+      }));
+      setObjectRenderStates((current) => ({ ...current, [nextObject.id]: "placeholder" }));
+    };
 
   const updateSelectedObject = (updates: Partial<PlacedDemoObject>) => {
     if (!selectedObjectId) {
       return;
     }
 
-    setPlacedObjects((current) =>
-      current.map((object) =>
+    updateRoomScene(room.id, (current) => ({
+      ...current,
+      objects: current.objects.map((object) =>
         object.id === selectedObjectId
           ? {
               ...object,
@@ -737,12 +918,13 @@ export function VisualizerShell() {
             }
           : object,
       ),
-    );
+    }));
   };
 
   const toggleObjectVisibility = (objectId: string) => {
-    setPlacedObjects((current) =>
-      current.map((object) =>
+    updateRoomScene(room.id, (current) => ({
+      ...current,
+      objects: current.objects.map((object) =>
         object.id === objectId
           ? {
               ...object,
@@ -750,7 +932,7 @@ export function VisualizerShell() {
             }
           : object,
       ),
-    );
+    }));
   };
 
   const deleteSelectedObject = () => {
@@ -758,13 +940,16 @@ export function VisualizerShell() {
       return;
     }
 
-    setPlacedObjects((current) => current.filter((object) => object.id !== selectedObjectId));
+    updateRoomScene(room.id, (current) => ({
+      ...current,
+      objects: current.objects.filter((object) => object.id !== selectedObjectId),
+      selectedObjectId: null,
+    }));
     setObjectRenderStates((current) => {
       const next = { ...current };
       delete next[selectedObjectId];
       return next;
     });
-    setSelectedObjectId(null);
   };
 
   const resetRoomObjects = () => {
@@ -824,12 +1009,17 @@ export function VisualizerShell() {
         const isActive = surfaceTarget === surface.id;
 
         return (
-          <button
-            key={surface.id}
-            type="button"
-            onClick={() => setSurfaceTarget(surface.id)}
-            data-active={isActive}
-            className={`toggle-pill min-h-11 rounded-[24px] px-4 py-4 text-left transition ${
+            <button
+              key={surface.id}
+              type="button"
+              onClick={() =>
+                updateRoomScene(room.id, (current) => ({
+                  ...current,
+                  activeSurface: surface.id,
+                }))
+              }
+              data-active={isActive}
+              className={`toggle-pill min-h-11 rounded-[24px] px-4 py-4 text-left transition ${
               isActive
                 ? "bg-gradient-to-r from-blue-600 to-sky-500 text-white shadow-[0_14px_30px_rgba(37,99,235,0.24)]"
                 : "bg-white/5 text-slate-200 hover:bg-white/8"
@@ -867,7 +1057,12 @@ export function VisualizerShell() {
                 >
                   <button
                     type="button"
-                    onClick={() => setSelectedObjectId(object.id)}
+                    onClick={() =>
+                      updateRoomScene(room.id, (current) => ({
+                        ...current,
+                        selectedObjectId: object.id,
+                      }))
+                    }
                     className="min-h-11 min-w-0 flex-1 rounded-[14px] px-1 py-1 text-left text-sm"
                   >
                     <p className={`font-semibold ${isSelected ? "text-sky-100" : "text-slate-100"}`}>
@@ -880,8 +1075,8 @@ export function VisualizerShell() {
                   <button
                     type="button"
                     onClick={() => toggleObjectVisibility(object.id)}
-                    aria-label={isVisible ? t("hideObject") : t("showObject")}
-                    title={isVisible ? t("hideObject") : t("showObject")}
+                    aria-label={isVisible ? t("hideObjectFull") : t("showObjectFull")}
+                    title={isVisible ? t("hideObjectFull") : t("showObjectFull")}
                     className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] border border-white/10 bg-white/5 text-slate-200 transition hover:bg-white/10"
                   >
                     <VisibilityIcon visible={isVisible} />
@@ -909,33 +1104,39 @@ export function VisualizerShell() {
       <p className="mt-1 text-xs text-slate-400">
         {selectedObject.isVisible === false ? t("hidden") : t("visible")}
       </p>
-      <div className="mt-3 grid grid-cols-3 gap-2">
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => updateSelectedObject({ y: 0 })}
+            aria-label={t("floorButtonFull")}
+            title={t("floorButtonFull")}
+            className="secondary-btn col-span-2 min-h-10 rounded-[14px] px-3 py-2 text-xs leading-tight whitespace-normal"
+          >
+            {t("floorButton")}
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              updateSelectedObject({ y: Math.min(3, (selectedObject.y ?? 0) + 0.1) })
+            }
+            aria-label={t("raiseFull")}
+            title={t("raiseFull")}
+            className="secondary-btn min-h-10 rounded-[14px] px-3 py-2 text-xs leading-tight whitespace-normal"
+          >
+            {t("raise")}
+          </button>
         <button
-          type="button"
-          onClick={() => updateSelectedObject({ y: 0 })}
-          className="secondary-btn min-h-10 rounded-[14px] px-3 py-2 text-xs"
-        >
-          {t("floorButton")}
-        </button>
-        <button
-          type="button"
-          onClick={() =>
-            updateSelectedObject({ y: Math.min(3, (selectedObject.y ?? 0) + 0.1) })
-          }
-          className="secondary-btn min-h-10 rounded-[14px] px-3 py-2 text-xs"
-        >
-          {t("raise")}
-        </button>
-        <button
-          type="button"
-          onClick={() =>
-            updateSelectedObject({ y: Math.max(-0.2, (selectedObject.y ?? 0) - 0.1) })
-          }
-          className="secondary-btn min-h-10 rounded-[14px] px-3 py-2 text-xs"
-        >
-          {t("lower")}
-        </button>
-      </div>
+            type="button"
+            onClick={() =>
+              updateSelectedObject({ y: Math.max(-0.2, (selectedObject.y ?? 0) - 0.1) })
+            }
+            aria-label={t("lowerFull")}
+            title={t("lowerFull")}
+            className="secondary-btn min-h-10 rounded-[14px] px-3 py-2 text-xs leading-tight whitespace-normal"
+          >
+            {t("lower")}
+          </button>
+        </div>
 
       <label className="mt-3 block">
         <span className="mb-2 block text-sm font-medium text-slate-200">
@@ -1012,12 +1213,14 @@ export function VisualizerShell() {
         />
       </label>
 
-      <button
-        type="button"
-        onClick={deleteSelectedObject}
-        className="secondary-btn mt-4 min-h-10 w-full rounded-[14px] px-4 py-2.5 text-sm"
-      >
-        {t("deleteObject")}
+        <button
+          type="button"
+          onClick={deleteSelectedObject}
+          aria-label={t("deleteObjectFull")}
+          title={t("deleteObjectFull")}
+          className="secondary-btn mt-4 min-h-10 w-full rounded-[14px] px-4 py-2.5 text-sm leading-tight whitespace-normal"
+        >
+          {t("deleteObject")}
       </button>
     </div>
   ) : (
@@ -1061,12 +1264,6 @@ export function VisualizerShell() {
       </summary>
 
       <div className="mt-4 flex flex-wrap gap-2">
-        <button type="button" onClick={saveSceneLocally} className="secondary-btn px-4 py-2.5 text-sm">
-          {t("saveScene")}
-        </button>
-        <button type="button" onClick={loadSavedScene} className="secondary-btn px-4 py-2.5 text-sm">
-          {t("loadSavedScene")}
-        </button>
         <button type="button" onClick={resetSavedScene} className="secondary-btn px-4 py-2.5 text-sm">
           {t("resetSavedScene")}
         </button>
@@ -1114,11 +1311,37 @@ export function VisualizerShell() {
               </p>
             </div>
 
-            <div className="flex flex-wrap gap-2.5 xl:justify-end">
-              <button type="button" onClick={exportScreenshot} className="secondary-btn px-4 py-2.5 text-sm">
+            <div className="flex flex-wrap gap-2 xl:justify-end">
+                <button
+                  type="button"
+                  onClick={saveSceneLocally}
+                  aria-label={t("saveSceneFull")}
+                  title={t("saveSceneFull")}
+                  className="secondary-btn min-h-10 px-3.5 py-2 text-sm whitespace-nowrap"
+                >
+                  {t("saveScene")}
+              </button>
+                <button
+                  type="button"
+                  onClick={loadSavedScene}
+                  aria-label={t("loadSavedSceneFull")}
+                  title={t("loadSavedSceneFull")}
+                  className="secondary-btn min-h-10 px-3.5 py-2 text-sm whitespace-nowrap"
+                >
+                  {t("loadSavedScene")}
+              </button>
+              <button
+                type="button"
+                onClick={exportScreenshot}
+                className="secondary-btn min-h-10 px-4 py-2.5 text-sm whitespace-nowrap"
+              >
                 {t("exportPreviewImage")}
               </button>
-              <button type="button" onClick={requestQuote} className="primary-btn px-4 py-2.5 text-sm">
+              <button
+                type="button"
+                onClick={requestQuote}
+                className="primary-btn min-h-10 px-4 py-2.5 text-sm whitespace-nowrap"
+              >
                 {t("requestQuote")}
               </button>
             </div>
@@ -1168,7 +1391,32 @@ export function VisualizerShell() {
                   <span>{t("recommendedMaterialsCount", { count: recommendedTiles.length })}</span>
                 </div>
               </div>
+              {sceneStatus || cloudError ? (
+                <p className="mt-2 text-xs text-slate-400">
+                  {sceneStatus || cloudError}
+                </p>
+              ) : null}
             </div>
+
+            <ProjectSummary
+              title={t("projectSummary")}
+              roomLabel={`${t("roomType")}: ${translateRoomLabel(room.id, t)}`}
+              activeSurfaceLabel={t("activeTarget", { target: targetLabel })}
+              floorLabel={t("floor")}
+              leftWallLabel={t("leftWall")}
+              rightWallLabel={t("rightWall")}
+              backWallLabel={t("backWall")}
+              floorMaterial={floorTile?.name ?? t("none")}
+              leftWallMaterial={leftWallTile?.name ?? t("none")}
+              rightWallMaterial={rightWallTile?.name ?? t("none")}
+              backWallMaterial={backWallTile?.name ?? t("none")}
+              visibleObjectsLabel={t("visibleRoomObjects")}
+              visibleObjects={visibleObjectLabels}
+              objectCountLabel={t("visibleObjectsCount", { count: visiblePlacedObjects.length })}
+              materialCategoriesLabel={t("materialCategories")}
+              materialCategories={summaryMaterialCategories}
+              noneLabel={t("none")}
+            />
 
             <div className="grid items-start gap-2 xl:grid-cols-[minmax(0,1fr)_296px]">
               <div className="flex min-w-0 flex-col gap-2">
@@ -1179,7 +1427,12 @@ export function VisualizerShell() {
                   wallSurfaceTiles={wallSurfaceTiles}
                   placedObjects={placedObjects}
                   selectedObjectId={selectedObjectId}
-                  onSelectObject={setSelectedObjectId}
+                  onSelectObject={(objectId) =>
+                    updateRoomScene(room.id, (current) => ({
+                      ...current,
+                      selectedObjectId: objectId,
+                    }))
+                  }
                   onObjectRenderStateChange={(objectId, state) =>
                     setObjectRenderStates((current) =>
                       current[objectId] === state ? current : { ...current, [objectId]: state },

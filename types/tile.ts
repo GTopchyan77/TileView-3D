@@ -101,6 +101,24 @@ export type SavedSceneObject = {
   isVisible?: boolean;
 };
 
+export type RoomSceneData = {
+  activeSurface: SceneSurfaceSelection;
+  floorTileId: string;
+  wallTileIds: Record<WallSurfaceId, string>;
+  objects: PlacedDemoObject[];
+  selectedObjectId: string | null;
+};
+
+export type SavedRoomSceneData = {
+  activeSurface: SceneSurfaceSelection;
+  floorTileId: string;
+  leftWallTileId: string;
+  rightWallTileId: string;
+  backWallTileId: string;
+  objects: SavedSceneObject[];
+  selectedObjectId?: string | null;
+};
+
 export type SavedSceneData = {
   name: string;
   roomType: RoomTemplateId;
@@ -110,4 +128,5 @@ export type SavedSceneData = {
   rightWallTileId: string;
   backWallTileId: string;
   objects: SavedSceneObject[];
+  roomStates?: Partial<Record<RoomTemplateId, SavedRoomSceneData>>;
 };
