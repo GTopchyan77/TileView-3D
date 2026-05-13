@@ -17,6 +17,7 @@ import { getSupabaseBrowserClient, isSupabaseConfigured, mapCloudScene } from "@
 import {
   ALL_OBJECT_TYPES,
   DemoObjectType,
+  MaterialCategory,
   PlacedDemoObject,
   RoomTemplateId,
   SavedSceneData,
@@ -27,6 +28,7 @@ import {
 import { RoomViewer } from "./room-viewer";
 
 type SurfaceSelection = SceneSurfaceSelection;
+type MaterialCategoryFilter = "all" | MaterialCategory;
 
 const materialCategoryLabelKeys = {
   tile: "tiles",
@@ -284,12 +286,12 @@ function TileCard({
         src={tile.image}
         alt={tile.name}
         errorLabel={imageUnavailableLabel}
-        className="h-32 w-full rounded-[22px] border border-white/10"
+        className="h-24 w-full rounded-[18px] border border-white/10"
       />
-      <div className="mt-4 flex items-start justify-between gap-3">
+      <div className="mt-3 flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="truncate text-base font-semibold text-slate-50">{tile.name}</p>
-          <p className="mt-1 text-sm text-slate-300">
+          <p className="truncate text-sm font-semibold text-slate-50">{tile.name}</p>
+          <p className="mt-1 text-xs text-slate-300">
             {tile.widthCm}x{tile.heightCm} cm
           </p>
         </div>
@@ -299,12 +301,12 @@ function TileCard({
           </span>
         ) : null}
       </div>
-      <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-300">
-        <span className="glass-chip rounded-full px-3 py-1">{categoryLabel}</span>
-        <span className="glass-chip rounded-full px-3 py-1">{tile.finish}</span>
-        <span className="glass-chip rounded-full px-3 py-1">{tile.tone}</span>
+      <div className="mt-2 flex flex-wrap gap-1.5 text-[0.7rem] text-slate-300">
+        <span className="glass-chip rounded-full px-2.5 py-1">{categoryLabel}</span>
+        <span className="glass-chip rounded-full px-2.5 py-1">{tile.finish}</span>
+        <span className="glass-chip rounded-full px-2.5 py-1">{tile.tone}</span>
       </div>
-      <p className="mt-3 text-xs font-medium text-slate-300/80">{tapToApplyLabel}</p>
+      <p className="mt-2 text-[0.72rem] font-medium text-slate-300/80">{tapToApplyLabel}</p>
     </button>
   );
 }
@@ -342,6 +344,8 @@ export function VisualizerShell() {
   const [roomId, setRoomId] = useState<RoomTemplateId>("bathroom");
   const [surfaceTarget, setSurfaceTarget] = useState<SurfaceSelection>("floor");
   const [catalogMode, setCatalogMode] = useState<CatalogMode>("recommended");
+  const [categoryFilter, setCategoryFilter] = useState<MaterialCategoryFilter>("all");
+  const [catalogSearch, setCatalogSearch] = useState("");
   const [floorTileId, setFloorTileId] = useState<string>("travertine-sand");
   const [wallTileIds, setWallTileIds] = useState<Record<WallSurfaceId, string>>({
     left: "marble-ivory",
@@ -439,10 +443,25 @@ export function VisualizerShell() {
     () => getCatalogTiles(tiles, room.id, surfaceTarget, "recommended"),
     [room.id, surfaceTarget, tiles],
   );
-  const catalogTiles = useMemo(
+  const baseCatalogTiles = useMemo(
     () => getCatalogTiles(tiles, room.id, surfaceTarget, catalogMode),
     [catalogMode, room.id, surfaceTarget, tiles],
   );
+  const catalogTiles = useMemo(() => {
+    const query = catalogSearch.trim().toLowerCase();
+
+    return baseCatalogTiles.filter((tile) => {
+      const categoryMatches = categoryFilter === "all" || getTileCategory(tile) === categoryFilter;
+      const queryMatches =
+        !query ||
+        [tile.name, tile.finish, tile.tone, getTileCategory(tile)]
+          .join(" ")
+          .toLowerCase()
+          .includes(query);
+
+      return categoryMatches && queryMatches;
+    });
+  }, [baseCatalogTiles, catalogSearch, categoryFilter]);
   const materialCategoryLabel = (tile: Tile) => t(materialCategoryLabelKeys[getTileCategory(tile)]);
   const selectedObject = placedObjects.find((object) => object.id === selectedObjectId) ?? null;
   const getObjectLabel = (type: DemoObjectType) => translateObjectLabel(type, t);
@@ -1070,40 +1089,6 @@ export function VisualizerShell() {
               <p className="section-kicker">{t("chooseSurface")}</p>
               <div className="mt-5">{surfaceSelectorContent}</div>
             </div>
-
-            <div className="panel rounded-[28px] p-5">
-              <p className="section-kicker">{t("selectionSummary")}</p>
-              <div className="mt-4 grid gap-3">
-                <div className="glass-chip rounded-[22px] p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">{t("floor")}</p>
-                  <p className="mt-2 text-sm font-semibold text-slate-50">{floorTile?.name ?? t("none")}</p>
-                  <p className="mt-1 text-sm text-slate-300">
-                    {floorTile ? `${floorTile.widthCm}x${floorTile.heightCm} cm` : t("noTileAppliedYet")}
-                  </p>
-                </div>
-                <div className="glass-chip rounded-[22px] p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">{t("leftWall")}</p>
-                  <p className="mt-2 text-sm font-semibold text-slate-50">{leftWallTile?.name ?? t("none")}</p>
-                  <p className="mt-1 text-sm text-slate-300">
-                    {leftWallTile ? `${leftWallTile.widthCm}x${leftWallTile.heightCm} cm` : t("noTileAppliedYet")}
-                  </p>
-                </div>
-                <div className="glass-chip rounded-[22px] p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">{t("rightWall")}</p>
-                  <p className="mt-2 text-sm font-semibold text-slate-50">{rightWallTile?.name ?? t("none")}</p>
-                  <p className="mt-1 text-sm text-slate-300">
-                    {rightWallTile ? `${rightWallTile.widthCm}x${rightWallTile.heightCm} cm` : t("noTileAppliedYet")}
-                  </p>
-                </div>
-                <div className="glass-chip rounded-[22px] p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">{t("backWall")}</p>
-                  <p className="mt-2 text-sm font-semibold text-slate-50">{backWallTile?.name ?? t("none")}</p>
-                  <p className="mt-1 text-sm text-slate-300">
-                    {backWallTile ? `${backWallTile.widthCm}x${backWallTile.heightCm} cm` : t("noTileAppliedYet")}
-                  </p>
-                </div>
-              </div>
-            </div>
           </aside>
 
           <section className="flex flex-col gap-5">
@@ -1194,9 +1179,39 @@ export function VisualizerShell() {
                         </button>
                       ))}
                     </div>
+                    <div className="mb-3">
+                      <input
+                        type="search"
+                        value={catalogSearch}
+                        onChange={(event) => setCatalogSearch(event.target.value)}
+                        placeholder={t("searchMaterials")}
+                        className="min-h-11 w-full rounded-full border border-white/10 bg-slate-950/55 px-4 text-sm text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-sky-300/50"
+                      />
+                    </div>
+                    <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
+                      {[
+                        { value: "all" as const, label: t("all") },
+                        { value: "tile" as const, label: t("tiles") },
+                        { value: "wallpaper" as const, label: t("wallpapers") },
+                        { value: "laminate" as const, label: t("laminates") },
+                      ].map((category) => (
+                        <button
+                          key={category.value}
+                          type="button"
+                          onClick={() => setCategoryFilter(category.value)}
+                          className={`shrink-0 rounded-full px-3 py-2 text-xs font-semibold transition ${
+                            categoryFilter === category.value
+                              ? "bg-white text-slate-950"
+                              : "bg-white/8 text-slate-200 hover:bg-white/12"
+                          }`}
+                        >
+                          {category.label}
+                        </button>
+                      ))}
+                    </div>
                     <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-2">
                       {catalogTiles.map((tile) => (
-                        <div key={tile.id} className="min-w-[220px] flex-none">
+                        <div key={tile.id} className="min-w-[190px] flex-none">
                           <TileCard
                             tile={tile}
                             selected={selectedTileId === tile.id}
@@ -1225,20 +1240,26 @@ export function VisualizerShell() {
                   </AccordionSection>
                 </div>
 
-                <div className="hidden gap-4 md:grid md:grid-cols-2">
-                  <div className="panel panel-hover rounded-[26px] p-5">
-                    <p className="section-kicker">{t("floor")}</p>
-                    <p className="mt-3 text-xl font-semibold text-slate-50">{floorTile?.name ?? t("noneSelected")}</p>
-                    <p className="mt-2 text-sm text-slate-300">
-                      {floorTile?.finish ?? t("chooseFromCatalog")}
-                    </p>
-                  </div>
-                  <div className="panel panel-hover rounded-[26px] p-5">
-                    <p className="section-kicker">{t("chooseSurface")}</p>
-                    <p className="mt-3 text-xl font-semibold text-slate-50">{targetLabel}</p>
-                    <p className="mt-2 text-sm text-slate-300">
-                      {t("activeWallTargetHelp")}
-                    </p>
+                <div className="hidden rounded-[22px] border border-white/10 bg-white/[0.045] px-4 py-3 md:block">
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-300">
+                    <span className="rounded-full bg-sky-400/12 px-3 py-1.5 font-semibold text-sky-100">
+                      {translateRoomLabel(room.id, t)}
+                    </span>
+                    <span className="rounded-full bg-white/8 px-3 py-1.5">
+                      {t("activeTarget", { target: targetLabel })}
+                    </span>
+                    <span className="rounded-full bg-white/8 px-3 py-1.5">
+                      {t("floor")}: {floorTile?.name ?? t("none")}
+                    </span>
+                    <span className="rounded-full bg-white/8 px-3 py-1.5">
+                      {t("leftWall")}: {leftWallTile?.name ?? t("none")}
+                    </span>
+                    <span className="rounded-full bg-white/8 px-3 py-1.5">
+                      {t("rightWall")}: {rightWallTile?.name ?? t("none")}
+                    </span>
+                    <span className="rounded-full bg-white/8 px-3 py-1.5">
+                      {t("backWall")}: {backWallTile?.name ?? t("none")}
+                    </span>
                   </div>
                 </div>
 
@@ -1280,7 +1301,38 @@ export function VisualizerShell() {
                     ))}
                   </div>
 
-                  <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                  <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(240px,360px)_1fr] lg:items-center">
+                    <input
+                      type="search"
+                      value={catalogSearch}
+                      onChange={(event) => setCatalogSearch(event.target.value)}
+                      placeholder={t("searchMaterials")}
+                      className="min-h-11 rounded-full border border-white/10 bg-slate-950/55 px-4 text-sm text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-sky-300/50"
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        { value: "all" as const, label: t("all") },
+                        { value: "tile" as const, label: t("tiles") },
+                        { value: "wallpaper" as const, label: t("wallpapers") },
+                        { value: "laminate" as const, label: t("laminates") },
+                      ].map((category) => (
+                        <button
+                          key={category.value}
+                          type="button"
+                          onClick={() => setCategoryFilter(category.value)}
+                          className={`rounded-full px-3.5 py-2 text-xs font-semibold transition ${
+                            categoryFilter === category.value
+                              ? "bg-white text-slate-950"
+                              : "bg-white/8 text-slate-200 hover:bg-white/12"
+                          }`}
+                        >
+                          {category.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                     {catalogTiles.map((tile) => (
                       <TileCard
                         key={tile.id}
