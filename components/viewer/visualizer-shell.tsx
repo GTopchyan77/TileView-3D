@@ -79,6 +79,22 @@ const VALID_SURFACE_TARGETS = new Set<SurfaceSelection>([
 ]);
 const VALID_OBJECT_TYPES = new Set<DemoObjectType>(ALL_OBJECT_TYPES);
 
+function VisibilityIcon({ visible }: { visible: boolean }) {
+  return visible ? (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+      <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z" />
+      <circle cx="12" cy="12" r="2.8" />
+    </svg>
+  ) : (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+      <path d="M3 3l18 18" />
+      <path d="M10.6 5.2A13 13 0 0 1 12 5c6.5 0 10 7 10 7a16.8 16.8 0 0 1-4 4.8" />
+      <path d="M6.7 6.8A16.8 16.8 0 0 0 2 12s3.5 7 10 7c1.5 0 2.9-.3 4.1-.8" />
+      <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" />
+    </svg>
+  );
+}
+
 function isRoomTemplateId(value: string): value is RoomTemplateId {
   return VALID_ROOM_TYPES.has(value as RoomTemplateId);
 }
@@ -125,17 +141,18 @@ function parseSavedSceneData(value: string | null): SavedSceneData | null {
           return null;
         }
 
-        return {
-          id: item.id,
-          type: item.type as DemoObjectType,
-          x: item.x,
-          y: typeof item.y === "number" ? item.y : 0,
-          z: item.z,
-          rotationDeg: item.rotationDeg,
-          scale: item.scale,
-          modelYOffset: typeof item.modelYOffset === "number" ? item.modelYOffset : undefined,
-        };
-      })
+          return {
+            id: item.id,
+            type: item.type as DemoObjectType,
+            x: item.x,
+            y: typeof item.y === "number" ? item.y : 0,
+            z: item.z,
+            rotationDeg: item.rotationDeg,
+            scale: item.scale,
+            modelYOffset: typeof item.modelYOffset === "number" ? item.modelYOffset : undefined,
+            isVisible: item.isVisible !== false,
+          };
+        })
       .filter((item): item is NonNullable<typeof item> => item !== null);
 
     return {
@@ -176,16 +193,17 @@ function createRoomObjects(roomId: RoomTemplateId, widthM: number, depthM: numbe
     scale = 1,
     y = 0,
     modelYOffset = defaultModelYOffset(type),
-  ): PlacedDemoObject => ({
-    id,
-    type,
-    x: clamp(x, -xLimit, xLimit),
-    y,
-    z: clamp(z, -zLimit, zLimit),
-    rotationDeg,
-    scale,
-    modelYOffset,
-  });
+    ): PlacedDemoObject => ({
+      id,
+      type,
+      x: clamp(x, -xLimit, xLimit),
+      y,
+      z: clamp(z, -zLimit, zLimit),
+      rotationDeg,
+      scale,
+      modelYOffset,
+      isVisible: true,
+    });
 
   if (roomId === "bathroom") {
     return [
@@ -474,17 +492,18 @@ export function VisualizerShell() {
     leftWallTileId: wallTileIds.left,
     rightWallTileId: wallTileIds.right,
     backWallTileId: wallTileIds.back,
-    objects: placedObjects.map((object) => ({
-      id: object.id,
-      type: object.type,
-      x: object.x,
-      y: object.y ?? 0,
-      z: object.z,
-      rotationDeg: object.rotationDeg,
-      scale: object.scale,
-      modelYOffset: object.modelYOffset,
-    })),
-  });
+      objects: placedObjects.map((object) => ({
+        id: object.id,
+        type: object.type,
+        x: object.x,
+        y: object.y ?? 0,
+        z: object.z,
+        rotationDeg: object.rotationDeg,
+        scale: object.scale,
+        modelYOffset: object.modelYOffset,
+        isVisible: object.isVisible !== false,
+      })),
+    });
 
   const applyScenePayload = (scene: SavedSceneData) => {
     setRoomId(scene.roomType);
@@ -495,7 +514,7 @@ export function VisualizerShell() {
       right: scene.rightWallTileId,
       back: scene.backWallTileId,
     });
-    setPlacedObjects(scene.objects);
+    setPlacedObjects(scene.objects.map((object) => ({ ...object, isVisible: object.isVisible !== false })));
     setSelectedObjectId(scene.objects[0]?.id ?? null);
     setObjectRenderStates(
       Object.fromEntries(scene.objects.map((object) => [object.id, "placeholder" as const])),
@@ -677,9 +696,9 @@ export function VisualizerShell() {
     const zLimit = room.depthM / 2 - 0.55;
     const isWallMounted = type === "mirror" || type === "tv";
     nextObjectIdRef.current += 1;
-    const nextObject: PlacedDemoObject = {
-      id: `${room.id}-${type}-${nextObjectIdRef.current}-${count}`,
-      type,
+      const nextObject: PlacedDemoObject = {
+        id: `${room.id}-${type}-${nextObjectIdRef.current}-${count}`,
+        type,
       x: isWallMounted
         ? clamp(count === 0 ? 0 : (count % 2 === 0 ? -0.55 : 0.55), -xLimit, xLimit)
         : clamp((count % 2 === 0 ? -0.3 : 0.3) + count * 0.18, -xLimit, xLimit),
@@ -688,15 +707,16 @@ export function VisualizerShell() {
         isWallMounted
           ? -zLimit
           : clamp(0.18 + count * 0.16, -zLimit, zLimit),
-      rotationDeg:
-        type === "counter" || type === "wardrobe"
-          ? -90
-          : type === "tv" || type === "mirror"
-            ? 0
-            : 0,
-      scale: type === "mirror" ? 0.78 : type === "tv" ? 0.9 : 1,
-      modelYOffset: type === "microwave" ? 0.92 : 0,
-    };
+        rotationDeg:
+          type === "counter" || type === "wardrobe"
+            ? -90
+            : type === "tv" || type === "mirror"
+              ? 0
+              : 0,
+        scale: type === "mirror" ? 0.78 : type === "tv" ? 0.9 : 1,
+        modelYOffset: type === "microwave" ? 0.92 : 0,
+        isVisible: true,
+      };
 
     setPlacedObjects((current) => [...current, nextObject]);
     setObjectRenderStates((current) => ({ ...current, [nextObject.id]: "placeholder" }));
@@ -714,6 +734,19 @@ export function VisualizerShell() {
           ? {
               ...object,
               ...updates,
+            }
+          : object,
+      ),
+    );
+  };
+
+  const toggleObjectVisibility = (objectId: string) => {
+    setPlacedObjects((current) =>
+      current.map((object) =>
+        object.id === objectId
+          ? {
+              ...object,
+              isVisible: object.isVisible === false,
             }
           : object,
       ),
@@ -812,34 +845,51 @@ export function VisualizerShell() {
     </div>
   );
 
-  const sceneObjectsContent = (
-    <div className="rounded-[24px] border border-white/10 bg-white/5 p-4">
-      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">
-        {t("addObjects")}
-      </p>
-      {placedObjects.length ? (
-        <div className="mt-3 grid gap-2">
-          {placedObjects.map((object, index) => {
-            const isSelected = object.id === selectedObjectId;
+    const sceneObjectsContent = (
+      <div className="rounded-[24px] border border-white/10 bg-white/5 p-4">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">
+          {t("addObjects")}
+        </p>
+        {placedObjects.length ? (
+          <div className="mt-3 grid gap-2">
+            {placedObjects.map((object, index) => {
+              const isSelected = object.id === selectedObjectId;
+              const isVisible = object.isVisible !== false;
 
-            return (
-              <button
-                key={object.id}
-                type="button"
-                onClick={() => setSelectedObjectId(object.id)}
-                className={`min-h-11 rounded-[18px] border px-4 py-3 text-left text-sm transition ${
-                  isSelected
-                    ? "border-sky-400/40 bg-sky-500/12 text-sky-100"
-                    : "border-white/10 bg-slate-950/45 text-slate-200 hover:border-white/20"
-                }`}
-              >
-                <p className="font-semibold">
-                  {index + 1}. {getObjectLabel(object.type)}
-                </p>
-              </button>
-            );
-          })}
-        </div>
+              return (
+                <div
+                  key={object.id}
+                  className={`flex items-center gap-2 rounded-[18px] border px-3 py-2.5 transition ${
+                    isSelected
+                      ? "border-sky-400/40 bg-sky-500/12"
+                      : "border-white/10 bg-slate-950/45 hover:border-white/20"
+                  }`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setSelectedObjectId(object.id)}
+                    className="min-h-11 min-w-0 flex-1 rounded-[14px] px-1 py-1 text-left text-sm"
+                  >
+                    <p className={`font-semibold ${isSelected ? "text-sky-100" : "text-slate-100"}`}>
+                      {index + 1}. {getObjectLabel(object.type)}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-400">
+                      {isVisible ? t("visible") : t("hidden")}
+                    </p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => toggleObjectVisibility(object.id)}
+                    aria-label={isVisible ? t("hideObject") : t("showObject")}
+                    title={isVisible ? t("hideObject") : t("showObject")}
+                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] border border-white/10 bg-white/5 text-slate-200 transition hover:bg-white/10"
+                  >
+                    <VisibilityIcon visible={isVisible} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
       ) : (
         <p className="mt-3 text-sm text-slate-300">
           {t("emptyRoomObjectHelp", { roomName: t("emptyRoom") })}
@@ -855,6 +905,9 @@ export function VisualizerShell() {
       </p>
       <p className="mt-1.5 text-base font-semibold text-slate-50">
         {getObjectLabel(selectedObject.type)}
+      </p>
+      <p className="mt-1 text-xs text-slate-400">
+        {selectedObject.isVisible === false ? t("hidden") : t("visible")}
       </p>
       <div className="mt-3 grid grid-cols-3 gap-2">
         <button
@@ -1049,26 +1102,23 @@ export function VisualizerShell() {
         <SiteNav />
       </div>
 
-      <main className="mx-auto flex min-h-screen w-full max-w-[1600px] flex-col gap-4 px-4 py-4 md:px-6 md:py-5">
-        <section className="fade-in-up py-2">
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
-            <div className="max-w-3xl">
-              <h1 className="display-title text-3xl font-semibold text-white md:text-5xl">
+      <main className="mx-auto flex min-h-screen w-full max-w-[1660px] flex-col gap-2 px-3 py-3 md:px-4 md:py-3">
+        <section className="fade-in-up py-0.5">
+          <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
+            <div className="min-w-0">
+              <h1 className="display-title text-[1.75rem] font-semibold text-white md:text-[2.15rem]">
                 {t("appTitle")}
               </h1>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-200 md:text-base">
+              <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-300 md:text-[0.9rem]">
                 {t("appSubtitle")}
-              </p>
-              <p className="mt-2 inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-sky-100">
-                {translateRoomLabel(room.id, t)}
               </p>
             </div>
 
-            <div className="flex flex-wrap gap-3 xl:justify-end">
-              <button type="button" onClick={exportScreenshot} className="secondary-btn px-5 py-3 text-sm">
+            <div className="flex flex-wrap gap-2.5 xl:justify-end">
+              <button type="button" onClick={exportScreenshot} className="secondary-btn px-4 py-2.5 text-sm">
                 {t("exportPreviewImage")}
               </button>
-              <button type="button" onClick={requestQuote} className="primary-btn px-5 py-3 text-sm">
+              <button type="button" onClick={requestQuote} className="primary-btn px-4 py-2.5 text-sm">
                 {t("requestQuote")}
               </button>
             </div>
@@ -1077,44 +1127,51 @@ export function VisualizerShell() {
 
         <section
           id="visualizer"
-          className="grid items-start gap-4 xl:grid-cols-[270px_minmax(0,1fr)]"
+          className="grid items-start gap-2 xl:grid-cols-[236px_minmax(0,1fr)]"
         >
-          <aside className="hidden md:flex md:flex-col md:gap-6">
-            <div className="panel rounded-[28px] p-5">
+          <aside className="hidden md:flex md:flex-col md:gap-3">
+            <div className="panel rounded-[24px] p-3.5">
               <p className="section-kicker">{t("chooseRoom")}</p>
-              <div className="mt-5">{roomSelectorContent}</div>
+              <div className="mt-3">{roomSelectorContent}</div>
             </div>
 
-            <div className="panel rounded-[28px] p-5">
+            <div className="panel rounded-[24px] p-3.5">
               <p className="section-kicker">{t("chooseSurface")}</p>
-              <div className="mt-5">{surfaceSelectorContent}</div>
+              <div className="mt-3">{surfaceSelectorContent}</div>
             </div>
           </aside>
 
-          <section className="flex flex-col gap-5">
-            <div className="panel rounded-[26px] p-3 md:p-4">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                <div>
-                  <p className="section-kicker">{t("previewSection")}</p>
-                  <h2 className="mt-2 text-2xl font-semibold text-slate-50">
-                    {t("previewRoomTitle", { roomName: translateRoomLabel(room.id, t) })}
-                  </h2>
-                  <p className="mt-2 text-sm text-slate-300">
-                    {t("previewRoomHelp")}
-                  </p>
+          <section className="flex flex-col gap-2">
+            <div className="rounded-[18px] border border-white/10 bg-white/[0.04] px-3.5 py-2.5">
+              <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-300">
+                  <span className="rounded-full bg-sky-400/12 px-3 py-1.5 font-semibold text-sky-100">
+                    {translateRoomLabel(room.id, t)}
+                  </span>
+                  <span className="rounded-full bg-white/8 px-3 py-1.5">
+                    {t("activeTarget", { target: targetLabel })}
+                  </span>
+                  <span className="rounded-full bg-white/8 px-3 py-1.5">
+                    {t("floor")}: {floorTile?.name ?? t("none")}
+                  </span>
+                  <span className="rounded-full bg-white/8 px-3 py-1.5">
+                    {t("leftWall")}: {leftWallTile?.name ?? t("none")}
+                  </span>
+                  <span className="rounded-full bg-white/8 px-3 py-1.5">
+                    {t("rightWall")}: {rightWallTile?.name ?? t("none")}
+                  </span>
+                  <span className="rounded-full bg-white/8 px-3 py-1.5">
+                    {t("backWall")}: {backWallTile?.name ?? t("none")}
+                  </span>
                 </div>
-                <button
-                  type="button"
-                  onClick={exportScreenshot}
-                  className="secondary-btn px-5 py-3 text-sm"
-                >
-                  {t("exportPreviewImage")}
-                </button>
+                <div className="hidden lg:flex items-center gap-2 text-xs text-slate-400">
+                  <span>{t("recommendedMaterialsCount", { count: recommendedTiles.length })}</span>
+                </div>
               </div>
             </div>
 
-            <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-              <div className="flex min-w-0 flex-col gap-4">
+            <div className="grid items-start gap-2 xl:grid-cols-[minmax(0,1fr)_296px]">
+              <div className="flex min-w-0 flex-col gap-2">
                 <RoomViewer
                   room={room}
                   floorTile={floorTile}
@@ -1132,6 +1189,7 @@ export function VisualizerShell() {
                   showCameraButtons
                   hideDecor
                   helperText={t("viewerHelp")}
+                  frameClassName="h-[62vh] min-h-[400px] max-h-[76vh] md:h-[590px] lg:h-[660px] xl:h-[720px]"
                 />
 
                 <div className="panel rounded-[22px] p-4 md:hidden">
@@ -1240,43 +1298,18 @@ export function VisualizerShell() {
                   </AccordionSection>
                 </div>
 
-                <div className="hidden rounded-[22px] border border-white/10 bg-white/[0.045] px-4 py-3 md:block">
-                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-300">
-                    <span className="rounded-full bg-sky-400/12 px-3 py-1.5 font-semibold text-sky-100">
-                      {translateRoomLabel(room.id, t)}
-                    </span>
-                    <span className="rounded-full bg-white/8 px-3 py-1.5">
-                      {t("activeTarget", { target: targetLabel })}
-                    </span>
-                    <span className="rounded-full bg-white/8 px-3 py-1.5">
-                      {t("floor")}: {floorTile?.name ?? t("none")}
-                    </span>
-                    <span className="rounded-full bg-white/8 px-3 py-1.5">
-                      {t("leftWall")}: {leftWallTile?.name ?? t("none")}
-                    </span>
-                    <span className="rounded-full bg-white/8 px-3 py-1.5">
-                      {t("rightWall")}: {rightWallTile?.name ?? t("none")}
-                    </span>
-                    <span className="rounded-full bg-white/8 px-3 py-1.5">
-                      {t("backWall")}: {backWallTile?.name ?? t("none")}
-                    </span>
-                  </div>
-                </div>
-
-                {advancedSceneControls}
-
-                <section className="hidden rounded-[34px] p-5 md:block md:p-6">
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                <section className="hidden rounded-[28px] p-4 md:block md:p-5">
+                  <div className="flex flex-col gap-2.5 lg:flex-row lg:items-end lg:justify-between">
                     <div>
                       <p className="section-kicker">{t("tileCatalog")}</p>
-                      <h2 className="mt-2 text-2xl font-semibold text-slate-50">
+                      <h2 className="mt-1 text-lg font-semibold text-slate-50">
                         {t("tileCatalog")}
                       </h2>
-                      <p className="mt-2 text-sm text-slate-300">
+                      <p className="mt-1 text-sm text-slate-300">
                         {t("activeCatalogTarget", { target: targetLabel })}
                       </p>
                     </div>
-                    <div className="glass-chip rounded-[22px] px-4 py-3 text-sm text-slate-300">
+                    <div className="glass-chip rounded-[18px] px-4 py-2.5 text-sm text-slate-300">
                       <p className="font-semibold text-slate-50">
                         {t("recommendedMaterialsCount", { count: recommendedTiles.length })}
                       </p>
@@ -1284,7 +1317,7 @@ export function VisualizerShell() {
                     </div>
                   </div>
 
-                  <div className="mt-5 flex flex-wrap gap-2">
+                  <div className="mt-3 flex flex-wrap gap-2">
                     {(["recommended", "all"] as const).map((mode) => (
                       <button
                         key={mode}
@@ -1298,10 +1331,10 @@ export function VisualizerShell() {
                       >
                         {mode === "recommended" ? t("recommended") : t("all")}
                       </button>
-                    ))}
+                      ))}
                   </div>
 
-                  <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(240px,360px)_1fr] lg:items-center">
+                  <div className="mt-2.5 grid gap-2.5 lg:grid-cols-[minmax(240px,320px)_1fr] lg:items-center">
                     <input
                       type="search"
                       value={catalogSearch}
@@ -1332,7 +1365,7 @@ export function VisualizerShell() {
                     </div>
                   </div>
 
-                  <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                  <div className="mt-3 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                     {catalogTiles.map((tile) => (
                       <TileCard
                         key={tile.id}
@@ -1348,26 +1381,28 @@ export function VisualizerShell() {
                     ))}
                   </div>
                 </section>
+
+                <div className="pt-1">{advancedSceneControls}</div>
               </div>
 
-              <aside className="panel hidden min-w-[320px] self-start rounded-[26px] p-4 md:block">
+              <aside className="panel hidden min-w-[280px] self-start rounded-[22px] p-3.5 md:block">
                 <p className="section-kicker">{t("addObjects")}</p>
-                <h3 className="mt-2 text-xl font-semibold text-slate-50">
+                <h3 className="mt-1.5 text-lg font-semibold text-slate-50">
                   {t("automaticRoomObjects")}
                 </h3>
                 <p className="mt-2 text-sm leading-6 text-slate-300">
                   {t("roomObjectsHelp")}
                 </p>
 
-                <div className="mt-5 flex gap-3">
-                  <button type="button" onClick={resetRoomObjects} className="secondary-btn px-4 py-3 text-sm">
+                <div className="mt-4 flex gap-3">
+                  <button type="button" onClick={resetRoomObjects} className="secondary-btn px-4 py-2.5 text-sm">
                     {t("resetRoomObjects")}
                   </button>
                 </div>
 
-                <div className="mt-4">{sceneObjectsContent}</div>
-                <div className="mt-3">{selectedObjectControls}</div>
-                <div className="mt-3">{addObjectButtons}</div>
+                <div className="mt-3">{sceneObjectsContent}</div>
+                <div className="mt-2.5">{selectedObjectControls}</div>
+                <div className="mt-2.5">{addObjectButtons}</div>
               </aside>
             </div>
           </section>

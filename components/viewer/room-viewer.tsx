@@ -961,7 +961,7 @@ function PlacedObjectsLayer({
 }) {
   return (
     <>
-      {objects.map((object) => (
+      {objects.filter((object) => object.isVisible !== false).map((object) => (
         <SceneObject
           key={object.id}
           object={object}

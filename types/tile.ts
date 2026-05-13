@@ -86,6 +86,7 @@ export type PlacedDemoObject = {
   rotationDeg: number;
   scale: number;
   modelYOffset?: number;
+  isVisible?: boolean;
 };
 
 export type SavedSceneObject = {
@@ -97,6 +98,7 @@ export type SavedSceneObject = {
   rotationDeg: number;
   scale: number;
   modelYOffset?: number;
+  isVisible?: boolean;
 };
 
 export type SavedSceneData = {
